@@ -152,6 +152,24 @@ contract ERC20 {
 
 }
 
+contract ERC20Mintable is ERC20 {
+    string public name;
+    string public symbol;
+    uint8 public decimals;
+
+    function _mint(address to, uint256 amount) internal {
+        _balances[to] = _balances[to].add(amount);
+        _totalSupply = _totalSupply.add(amount);
+        emit Transfer(address(0), to, amount);
+    }
+
+    function _burn(address from, uint256 amount) internal {
+        _balances[from] = _balances[from].sub(amount);
+        _totalSupply = _totalSupply.sub(amount);
+        emit Transfer(from, address(0), amount);
+    }
+}
+
 interface ERC20NonStandard {
     function balanceOf(address owner) external view returns (uint256);
     function transfer(address to, uint256 amount) external;
@@ -162,7 +180,7 @@ contract Oracle {
     function latestAnswer() external view returns (int256);
 }
 
-contract ImpermanentGain is Ownable {
+contract ImpermanentGain is Ownable, ERC20Mintable {
     using SafeMath for *;
 
     bool public canBuy;
@@ -184,11 +202,9 @@ contract ImpermanentGain is Ownable {
 
     uint256 public poolA;
     uint256 public poolB;
-    uint256 public poolLP;
 
     mapping(address => uint256) public a;
     mapping(address => uint256) public b;
-    mapping(address => uint256) public lp;
 
     event Mint(address indexed minter, uint256 amount);
     event Burn(address indexed burner, uint256 amount);
@@ -205,11 +221,14 @@ contract ImpermanentGain is Ownable {
 
         canBuy = true;
 
+        name = "iGain LP token";
+        symbol = "iGLP";
+        decimals = 18;
+
         uint256 _lp = _a.mul(_b).sqrt();
         poolA = _a;
         poolB = _b;
-        poolLP = _lp;
-        lp[msg.sender] = _lp;
+        _mint(msg.sender, _lp);
         if(_b > _a) {
             a[msg.sender] = _b.sub(_a);
             require(doTransferIn(baseToken, msg.sender, _b));
@@ -309,14 +328,13 @@ contract ImpermanentGain is Ownable {
         uint256 _k = poolA.add(amount).mul(poolB.add(amount));
 
         // ( sqrt(_k/k) - 1 ) * LP
-        _lp = _k.mul(1e36).div(k).sqrt().sub(1e18).mul(poolLP).div(1e18);
+        _lp = _k.mul(1e36).div(k).sqrt().sub(1e18).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(997).div(1000); //fee
 
         require(_lp >= min_lp, "SLIPPAGE_DETECTED");
         poolA = poolA.add(amount);
         poolB = poolB.add(amount);
-        poolLP = poolLP.add(_lp);
-        lp[msg.sender] = lp[msg.sender].add(_lp);
+        _mint(msg.sender, _lp);
         require(doTransferIn(baseToken, msg.sender, amount));
     }
 
@@ -327,14 +345,13 @@ contract ImpermanentGain is Ownable {
         uint256 _k = poolA.sub(amount).mul(poolB.sub(amount));
 
         // ( 1 - sqrt(_k/k) ) * LP
-        _lp = (1e18).sub(_k.mul(1e36).div(k).sqrt()).mul(poolLP).div(1e18);
+        _lp = (1e18).sub(_k.mul(1e36).div(k).sqrt()).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(1000).div(997); //fee
 
         require(_lp <= max_lp, "SLIPPAGE_DETECTED");
         poolA = poolA.sub(amount);
         poolB = poolB.sub(amount);
-        poolLP = poolLP.sub(_lp);
-        lp[msg.sender] = lp[msg.sender].sub(_lp);
+        _burn(msg.sender, _lp);
         require(doTransferOut(baseToken, msg.sender, amount));
     }
 
@@ -375,16 +392,15 @@ contract ImpermanentGain is Ownable {
         uint256 _k = poolA.add(_a).mul(poolB.add(_b));
 
         // ( sqrt(_k/k) - 1 ) * LP
-        _lp = _k.mul(1e36).div(k).sqrt().sub(1e18).mul(poolLP).div(1e18);
+        _lp = _k.mul(1e36).div(k).sqrt().sub(1e18).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(997).div(1000); //fee
 
         require(_lp >= min_lp, "SLIPPAGE_DETECTED");
         poolA = poolA.add(_a);
         poolB = poolB.add(_b);
-        poolLP = poolLP.add(_lp);
         a[msg.sender] = a[msg.sender].sub(_a);
         b[msg.sender] = b[msg.sender].sub(_b);
-        lp[msg.sender] = lp[msg.sender].add(_lp);
+        _mint(msg.sender, _lp);
     }
 
     // burn no more than `max_lp` of liquidity provider share, withdraw `_a` of a and `_b` of b
@@ -394,16 +410,15 @@ contract ImpermanentGain is Ownable {
         uint256 _k = poolA.sub(_a).mul(poolB.sub(_b));
 
         // ( 1 - sqrt(_k/k) ) * LP
-        _lp = (1e18).sub(_k.mul(1e36).div(k).sqrt()).mul(poolLP).div(1e18);
+        _lp = (1e18).sub(_k.mul(1e36).div(k).sqrt()).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(1000).div(997); //fee
 
         require(_lp <= max_lp, "SLIPPAGE_DETECTED");
         poolA = poolA.sub(_a);
         poolB = poolB.sub(_b);
-        poolLP = poolLP.sub(_lp);
         a[msg.sender] = a[msg.sender].add(_a);
         b[msg.sender] = b[msg.sender].add(_b);
-        lp[msg.sender] = lp[msg.sender].sub(_lp);
+        _burn(msg.sender, _lp);
     }
 
 
@@ -431,18 +446,17 @@ contract ImpermanentGain is Ownable {
     function claim() external returns (uint256 amount) {
         require(!canBuy, "Not yet");
 
-        uint256 _lp = lp[msg.sender];
+        uint256 _lp = _balances[msg.sender];
         uint256 _a;
         uint256 _b;
 
         if(_lp > 0) {
-            _a = poolA.mul(_lp).div(poolLP);   
-            _b = poolB.mul(_lp).div(poolLP);
+            _a = poolA.mul(_lp).div(_totalSupply);   
+            _b = poolB.mul(_lp).div(_totalSupply);
 
             poolA = poolA.sub(_a);
             poolB = poolB.sub(_b);
-            poolLP = poolLP.sub(_lp);
-            lp[msg.sender] = 0;
+            _burn(msg.sender, _lp);
         }
 
         _a = _a.add(a[msg.sender]);
