@@ -167,6 +167,7 @@ contract ImpermanentGain is Ownable {
 
     bool public canBuy;
 
+    address public treasury;
     address public baseToken;
     Oracle public oracle;
 
@@ -193,10 +194,11 @@ contract ImpermanentGain is Ownable {
     event Burn(address indexed burner, uint256 amount);
     event Swap(address indexed user, bool indexed a2b, uint256 input, uint256 output);
 
-    function init(address _baseToken, address _oracle, uint256 _duration, uint256 _a, uint256 _b) public {
+    function init(address _baseToken, address _oracle, address _treasury, uint256 _duration, uint256 _a, uint256 _b) public {
         require(openTime == 0, "Initialized");
         baseToken = _baseToken;
         oracle = Oracle(_oracle);
+        treasury = _treasury;
         openTime = now;
         closeTime = now.add(_duration);
         openPrice = uint256(oracle.latestAnswer());
@@ -478,8 +480,27 @@ contract ImpermanentGain is Ownable {
     }
 
     function doTransferOut(address tokenAddr, address to, uint amount) internal returns (bool result) {
+        uint256 fee = amount.div(100);
         ERC20NonStandard token = ERC20NonStandard(tokenAddr);
-        token.transfer(to, amount);
+        token.transfer(to, amount.sub(fee));
+
+        assembly {
+            switch returndatasize()
+                case 0 {                      // This is a non-standard ERC-20
+                    result := not(0)          // set result to true
+                }
+                case 32 {                     // This is a complaint ERC-20
+                    returndatacopy(0, 0, 32)
+                    result := mload(0)        // Set `result = returndata` of external call
+                }
+                default {                     // This is an excessively non-compliant ERC-20, revert.
+                    revert(0, 0)
+                }
+        }
+
+        if(!result) return result;
+
+        token.transfer(treasury, fee);
 
         assembly {
             switch returndatasize()
