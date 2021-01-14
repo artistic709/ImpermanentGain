@@ -434,7 +434,8 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
         canBuy = false;
         closePrice = uint256(oracle.latestAnswer());
         uint256 ratio = openPrice.mul(1e18).div(closePrice);
-        bPrice = calcIL(ratio);
+        uint256 _bPrice = calcIL(ratio).mul(10); //10x leverage
+        bPrice = _bPrice > 1e18 ? 1e18 : _bPrice;
     }
 
     function calcIL(uint256 ratio) public pure returns (uint256) {
