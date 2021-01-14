@@ -193,10 +193,10 @@ contract ImpermanentGain is Ownable {
     event Burn(address indexed burner, uint256 amount);
     event Swap(address indexed user, bool indexed a2b, uint256 input, uint256 output);
 
-    function init(/*address _baseToken, address _oracle,*/ uint256 _duration, uint256 _a, uint256 _b) public {
+    function init(address _baseToken, address _oracle, uint256 _duration, uint256 _a, uint256 _b) public {
         require(openTime == 0, "Initialized");
-        baseToken = address(0x6B175474E89094C44Da98b954EedeAC495271d0F); //DAI
-        oracle = Oracle(0x773616E4d11A78F511299002da57A0a94577F1f4); // DAI/ETH price
+        baseToken = _baseToken;
+        oracle = Oracle(_oracle);
         openTime = now;
         closeTime = now.add(_duration);
         openPrice = uint256(oracle.latestAnswer());
