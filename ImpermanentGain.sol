@@ -195,6 +195,8 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
     uint256 public openPrice;
     uint256 public closePrice;
 
+    uint256 public constant leverage = 10;
+
     // a + b = $1
     // b = tokenized put of impermanent loss
     // a = 1 - b
@@ -440,7 +442,7 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
         canBuy = false;
         closePrice = uint256(oracle.latestAnswer());
         uint256 ratio = openPrice.mul(1e18).div(closePrice);
-        uint256 _bPrice = calcIL(ratio).mul(10); //10x leverage
+        uint256 _bPrice = calcIL(ratio).mul(leverage); //leverage
         bPrice = _bPrice > 1e18 ? 1e18 : _bPrice;
     }
 
