@@ -279,6 +279,7 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
         _a = getAmountOut(amount, poolB, poolA);
         poolB = poolB.add(amount);
         poolA = poolA.sub(_a);
+        emit Swap(msg.sender, false, amount, _a);
         _a = _a.add(amount);
         require(_a >= min_a, "SLIPPAGE_DETECTED");
         a[msg.sender] = a[msg.sender].add(_a);
@@ -291,6 +292,7 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
         _a = getAmountIn(amount, poolA, poolB);
         poolB = poolB.sub(amount);
         poolA = poolA.add(_a);
+        emit Swap(msg.sender, true, _a, amount);
         _a = _a.add(amount);
         require(_a <= max_a, "SLIPPAGE_DETECTED");
         a[msg.sender] = a[msg.sender].sub(_a);
@@ -303,6 +305,7 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
         _b = getAmountOut(amount, poolA, poolB);
         poolA = poolA.add(amount);
         poolB = poolB.sub(_b);
+        emit Swap(msg.sender, true, amount, _b);
         _b = _b.add(amount);
         require(_b >= min_b, "SLIPPAGE_DETECTED");
         b[msg.sender] = b[msg.sender].add(_b);
@@ -315,6 +318,7 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
         _b = getAmountIn(amount, poolB, poolA);
         poolA = poolA.sub(amount);
         poolB = poolB.add(_b);
+        emit Swap(msg.sender, false, _b, amount);
         _b = _b.add(amount);
         require(_b <= max_b, "SLIPPAGE_DETECTED");
         b[msg.sender] = b[msg.sender].sub(_b);
@@ -368,6 +372,7 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
         poolB = poolB.sub(_b);
         a[msg.sender] = a[msg.sender].sub(_a);
         b[msg.sender] = b[msg.sender].add(_b);
+        emit Swap(msg.sender, true, _a, _b);
     }
 
     function swapBtoA(uint256 _b, uint256 min_a) external returns (uint256 _a) {
@@ -378,6 +383,7 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
         poolA = poolA.sub(_a);
         b[msg.sender] = b[msg.sender].sub(_b);
         a[msg.sender] = a[msg.sender].add(_a);
+        emit Swap(msg.sender, false, _b, _a);
     }
 
 
@@ -492,6 +498,8 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
                 }
         }
 
+        emit Mint(from, amount);
+
     }
 
     function doTransferOut(address tokenAddr, address to, uint amount) internal returns (bool result) {
@@ -530,6 +538,8 @@ contract ImpermanentGain is Ownable, ERC20Mintable {
                     revert(0, 0)
                 }
         }
+
+        emit Burn(to, amount);
 
     }
 
