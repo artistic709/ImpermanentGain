@@ -45,27 +45,6 @@ library SafeMath {
     }
 }
 
-contract Ownable {
-    address public owner;
-
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-    constructor() public {
-        owner = msg.sender;
-    }
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "permission denied");
-        _;
-    }
-
-    function transferOwnership(address newOwner) public onlyOwner {
-        require(newOwner != address(0), "invalid address");
-        emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
-    }
-}
-
 contract ERC20 {
     using SafeMath for uint256;
 
@@ -180,7 +159,7 @@ contract Oracle {
     function latestAnswer() external view returns (int256);
 }
 
-contract ImpermanentGain is Ownable, ERC20Mintable {
+contract ImpermanentGain is ERC20Mintable {
     using SafeMath for *;
 
     bool public canBuy;
