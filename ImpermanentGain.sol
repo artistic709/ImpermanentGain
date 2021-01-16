@@ -191,9 +191,12 @@ contract ImpermanentGain is ERC20Mintable {
     event Mint(address indexed minter, uint256 amount);
     event Burn(address indexed burner, uint256 amount);
     event Swap(address indexed user, bool indexed a2b, uint256 input, uint256 output);
+    event AddLP(address indexed provider, uint256 a, uint256 b, uint256 lp);
+    event RemoveLP(address indexed provider, uint256 a, uint256 b, uint256 lp);
 
     function init(address _baseToken, address _oracle, address _treasury, uint256 _duration, uint256 _a, uint256 _b) public {
         require(openTime == 0, "Initialized");
+        require(_a > 0 && _b > 0, "No initial liquidity");
         baseToken = _baseToken;
         oracle = Oracle(_oracle);
         treasury = _treasury;
@@ -219,6 +222,7 @@ contract ImpermanentGain is ERC20Mintable {
             b[msg.sender] = _a.sub(_b);
             require(doTransferIn(baseToken, msg.sender, _a));
         }
+        emit AddLP(msg.sender, _lp, _a, _b);
     }
 
     function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) internal pure returns (uint amountOut) {
@@ -322,6 +326,7 @@ contract ImpermanentGain is ERC20Mintable {
         poolB = poolB.add(amount);
         _mint(msg.sender, _lp);
         require(doTransferIn(baseToken, msg.sender, amount));
+        emit AddLP(msg.sender, _lp, amount, amount);
     }
 
     // burn no more than `min_lp` liquidity provider share, receive `amount` baseToken
@@ -339,6 +344,7 @@ contract ImpermanentGain is ERC20Mintable {
         poolB = poolB.sub(amount);
         _burn(msg.sender, _lp);
         require(doTransferOut(baseToken, msg.sender, amount));
+        emit RemoveLP(msg.sender, _lp, amount, amount);
     }
 
 
@@ -389,6 +395,7 @@ contract ImpermanentGain is ERC20Mintable {
         a[msg.sender] = a[msg.sender].sub(_a);
         b[msg.sender] = b[msg.sender].sub(_b);
         _mint(msg.sender, _lp);
+        emit AddLP(msg.sender, _lp, _a, _b);
     }
 
     // burn no more than `max_lp` of liquidity provider share, withdraw `_a` of a and `_b` of b
@@ -407,6 +414,7 @@ contract ImpermanentGain is ERC20Mintable {
         a[msg.sender] = a[msg.sender].add(_a);
         b[msg.sender] = b[msg.sender].add(_b);
         _burn(msg.sender, _lp);
+        emit RemoveLP(msg.sender, _lp, _a, _b);
     }
 
 
@@ -446,6 +454,7 @@ contract ImpermanentGain is ERC20Mintable {
             poolA = poolA.sub(_a);
             poolB = poolB.sub(_b);
             _burn(msg.sender, _lp);
+            emit RemoveLP(msg.sender, _lp, _a, _b);
         }
 
         _a = _a.add(a[msg.sender]);
