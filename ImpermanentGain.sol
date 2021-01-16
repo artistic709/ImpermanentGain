@@ -175,6 +175,7 @@ contract ImpermanentGain is ERC20Mintable {
     uint256 public closePrice;
 
     uint256 public constant leverage = 10;
+    uint256 public constant protocolFee = 100;
 
     // a + b = $1
     // b = tokenized put of impermanent loss
@@ -484,7 +485,7 @@ contract ImpermanentGain is ERC20Mintable {
     }
 
     function doTransferOut(address tokenAddr, address to, uint amount) internal returns (bool result) {
-        uint256 fee = amount.div(100);
+        uint256 fee = amount.div(protocolFee);
         ERC20NonStandard token = ERC20NonStandard(tokenAddr);
         token.transfer(to, amount.sub(fee));
 
