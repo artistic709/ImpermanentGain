@@ -224,6 +224,9 @@ contract ImpermanentGain is ERC20Mintable {
 
     uint256 public constant leverage = 10;
     uint256 public constant protocolFee = 100;
+    uint256 public constant minFee = 0.003e18;
+    uint256 public constant maxFee = 0.03e18;
+
 
     // a + b = $1
     // b = tokenized put of impermanent loss
@@ -273,19 +276,31 @@ contract ImpermanentGain is ERC20Mintable {
         emit AddLP(msg.sender, _lp, _a, _b);
     }
 
-    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) internal pure returns (uint amountOut) {
-        uint256 amountInWithFee = amountIn.mul(997);
+    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) internal view returns (uint amountOut) {
+        uint256 amountInWithFee = amountIn.mul(fee());
         uint256 numerator = amountInWithFee.mul(reserveOut);
-        uint256 denominator = reserveIn.mul(1000).add(amountInWithFee);
+        uint256 denominator = reserveIn.mul(1e18).add(amountInWithFee);
         amountOut = numerator / denominator;
     }
 
-    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal pure returns (uint amountIn) {
-        uint numerator = reserveIn.mul(amountOut).mul(1000);
-        uint denominator = reserveOut.sub(amountOut).mul(997);
+    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal view returns (uint amountIn) {
+        uint numerator = reserveIn.mul(amountOut).mul(1e18);
+        uint denominator = reserveOut.sub(amountOut).mul(fee());
         amountIn = (numerator / denominator).add(1);
     }
 
+    // 1 - swap fee (numerator, in 1e18 format)
+    function fee() public view returns (uint256) {
+        uint256 time = now;
+        uint256 _fee;
+        if(time > closeTime) _fee = maxFee;
+        else {
+            _fee = closeTime.sub(time).mul(minFee).add(
+                time.sub(openTime).mul(maxFee)
+            ).div(closeTime.sub(openTime));
+        }
+        return (1e18).sub(_fee);
+    }
 
     /***********************************|
     |          mint/burn token          |
@@ -367,7 +382,7 @@ contract ImpermanentGain is ERC20Mintable {
 
         // ( sqrt(_k/k) - 1 ) * LP
         _lp = _k.mul(1e18).div(k).sub(1e18).mul(_totalSupply).div(1e18);
-        _lp = _lp.mul(997).div(1000); //fee
+        _lp = _lp.mul(fee()).div(1e18); //fee
 
         require(_lp >= min_lp, "SLIPPAGE_DETECTED");
         poolA = poolA.add(amount);
@@ -385,7 +400,7 @@ contract ImpermanentGain is ERC20Mintable {
 
         // ( 1 - sqrt(_k/k) ) * LP
         _lp = (1e18).sub(_k.mul(1e18).div(k)).mul(_totalSupply).div(1e18);
-        _lp = _lp.mul(1000).div(997); //fee
+        _lp = _lp.mul(1e18).div(fee()); //fee
 
         require(_lp <= max_lp, "SLIPPAGE_DETECTED");
         poolA = poolA.sub(amount);
@@ -435,7 +450,7 @@ contract ImpermanentGain is ERC20Mintable {
 
         // ( sqrt(_k/k) - 1 ) * LP
         _lp = _k.mul(1e18).div(k).sub(1e18).mul(_totalSupply).div(1e18);
-        _lp = _lp.mul(997).div(1000); //fee
+        _lp = _lp.mul(fee()).div(1e18); //fee
 
         require(_lp >= min_lp, "SLIPPAGE_DETECTED");
         poolA = poolA.add(_a);
@@ -454,7 +469,7 @@ contract ImpermanentGain is ERC20Mintable {
 
         // ( 1 - sqrt(_k/k) ) * LP
         _lp = (1e18).sub(_k.mul(1e18).div(k)).mul(_totalSupply).div(1e18);
-        _lp = _lp.mul(1000).div(997); //fee
+        _lp = _lp.mul(1e18).div(fee()); //fee
 
         require(_lp <= max_lp, "SLIPPAGE_DETECTED");
         poolA = poolA.sub(_a);
@@ -527,11 +542,11 @@ contract ImpermanentGain is ERC20Mintable {
     }
 
     function doTransferOut(address tokenAddr, address to, uint amount) internal {
-        uint256 fee = amount.div(protocolFee);
+        uint256 _fee = amount.div(protocolFee);
 
         IERC20 token = IERC20(tokenAddr);
-        token.safeTransfer(to, amount.sub(fee));
-        token.safeTransfer(treasury, fee);
+        token.safeTransfer(to, amount.sub(_fee));
+        token.safeTransfer(treasury, _fee);
 
         emit Burn(to, amount);
     }
