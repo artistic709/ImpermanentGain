@@ -290,6 +290,14 @@ contract ImpermanentGain is ERC20Mintable {
         amountIn = (numerator / denominator).add(1);
     }
 
+    // calculate how many of a needs to be swapped for b when burning a
+    function burnPartialHelper(uint256 amountIn, uint256 reserveIn, uint256 reserveOut, uint256 f) internal pure returns (uint256 x) {
+        x = reserveOut.sub(amountIn).mul(f).div(1e18).add(reserveIn); // (reserveOut - a) * fee + reserveIn
+        x = x.mul(x).add(amountIn.mul(4).mul(reserveIn).mul(f).div(1e18)).sqrt();
+        x = x.add(amountIn.mul(f).div(1e18)).sub(reserveOut.mul(f).div(1e18)).sub(reserveIn);
+        x = x.mul(1e18).div(f).div(2);
+    }
+
     // 1 - swap fee (numerator, in 1e18 format)
     function fee() public view returns (uint256) {
         uint256 time = now;
@@ -336,16 +344,20 @@ contract ImpermanentGain is ERC20Mintable {
         doTransferIn(baseToken, msg.sender, amount);
     }
 
-    // burn no more than `max_a` of a, receive `amount` baseToken
-    function burnA(uint256 amount, uint256 max_a) external returns (uint256 _a) {
+    // burn `_a` of a, receive more than `min_amount` of baseToken
+    function burnA(uint256 _a, uint256 min_amount) external returns (uint256 amount) {
         require(canBuy, "cannot buy");
-        _a = getAmountIn(amount, poolA, poolB);
+        // amount = _a - x
+        uint256 x = burnPartialHelper(_a, poolA, poolB, fee());
+        amount = _a.sub(x);
+        require(amount >= min_amount, "SLIPPAGE_DETECTED");
+        
+        // A = A + x
+        // B = B - amount
+        poolA = poolA.add(x);
         poolB = poolB.sub(amount);
-        poolA = poolA.add(_a);
-        emit Swap(msg.sender, true, _a, amount);
-        _a = _a.add(amount);
-        require(_a <= max_a, "SLIPPAGE_DETECTED");
         a[msg.sender] = a[msg.sender].sub(_a);
+        emit Swap(msg.sender, true, x, amount);
         doTransferOut(baseToken, msg.sender, amount);
     }
 
@@ -362,16 +374,20 @@ contract ImpermanentGain is ERC20Mintable {
         doTransferIn(baseToken, msg.sender, amount);
     }
 
-    // burn no more than `max_b` of b, receive `amount` baseToken
-    function burnB(uint256 amount, uint256 max_b) external returns (uint256 _b) {
+    // burn `b` of b, receive more than `min_amount` of baseToken
+    function burnB(uint256 _b, uint256 min_amount) external returns (uint256 amount) {
         require(canBuy, "cannot buy");
-        _b = getAmountIn(amount, poolB, poolA);
+        // amount = _b - x
+        uint256 x = burnPartialHelper(_b, poolB, poolA, fee());
+        amount = _b.sub(x);
+        require(amount >= min_amount, "SLIPPAGE_DETECTED");
+        
+        // B = B + x
+        // A = A - amount
+        poolB = poolB.add(x);
         poolA = poolA.sub(amount);
-        poolB = poolB.add(_b);
-        emit Swap(msg.sender, false, _b, amount);
-        _b = _b.add(amount);
-        require(_b <= max_b, "SLIPPAGE_DETECTED");
         b[msg.sender] = b[msg.sender].sub(_b);
+        emit Swap(msg.sender, false, x, amount);
         doTransferOut(baseToken, msg.sender, amount);
     }
 
@@ -393,22 +409,20 @@ contract ImpermanentGain is ERC20Mintable {
         emit AddLP(msg.sender, _lp, amount, amount);
     }
 
-    // burn no more than `min_lp` liquidity provider share, receive `amount` baseToken
-    function burnLP(uint256 amount, uint256 max_lp) external returns (uint256 _lp) {
+    // burn `lp` of liquidity provider share, recieve more than `min_amount` of baseToken
+    function burnLP(uint256 lp, uint256 min_amount) external returns (uint256 amount) {
         require(canBuy, "cannot buy");
-        uint256 k = poolA.mul(poolB).sqrt();
-        uint256 _k = poolA.sub(amount).mul(poolB.sub(amount)).sqrt();
-
-        // ( 1 - sqrt(_k/k) ) * LP
-        _lp = (1e18).sub(_k.mul(1e18).div(k)).mul(_totalSupply).div(1e18);
-        _lp = _lp.mul(1e18).div(fee()); //fee
-
-        require(_lp <= max_lp, "SLIPPAGE_DETECTED");
+        uint256 s = poolA.add(poolB);
+        amount = poolA.mul(poolB).mul(4).mul(fee()).mul(lp).div(1e18).div(_totalSupply);
+        amount = amount.mul((2e18).sub(lp.mul(fee()).div(_totalSupply))).div(1e18);
+        amount = s.mul(s).sub(amount).sqrt();
+        amount = s.sub(amount).div(2);
+        require(amount >= min_amount, "SLIPPAGE_DETECTED");
         poolA = poolA.sub(amount);
         poolB = poolB.sub(amount);
-        _burn(msg.sender, _lp);
+        _burn(msg.sender, lp);
         doTransferOut(baseToken, msg.sender, amount);
-        emit RemoveLP(msg.sender, _lp, amount, amount);
+        emit RemoveLP(msg.sender, lp, amount, amount);
     }
 
 
