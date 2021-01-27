@@ -265,6 +265,7 @@ contract ImpermanentGain is ERC20Mintable {
         poolA = _a;
         poolB = _b;
         _mint(msg.sender, _lp);
+        _mint(address(0), 1000); //lock liquidity 
         if(_b > _a) {
             a[msg.sender] = _b.sub(_a);
             doTransferIn(baseToken, msg.sender, _b);
