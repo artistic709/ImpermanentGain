@@ -277,16 +277,16 @@ contract ImpermanentGain is ERC20Mintable {
         emit AddLP(msg.sender, _lp, _a, _b);
     }
 
-    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) internal view returns (uint amountOut) {
-        uint256 amountInWithFee = amountIn.mul(fee());
+    function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut, uint256 f) internal pure returns (uint amountOut) {
+        uint256 amountInWithFee = amountIn.mul(f);
         uint256 numerator = amountInWithFee.mul(reserveOut);
         uint256 denominator = reserveIn.mul(1e18).add(amountInWithFee);
         amountOut = numerator / denominator;
     }
 
-    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut) internal view returns (uint amountIn) {
+    function getAmountIn(uint amountOut, uint reserveIn, uint reserveOut, uint256 f) internal pure returns (uint amountIn) {
         uint numerator = reserveIn.mul(amountOut).mul(1e18);
-        uint denominator = reserveOut.sub(amountOut).mul(fee());
+        uint denominator = reserveOut.sub(amountOut).mul(f);
         amountIn = (numerator / denominator).add(1);
     }
 
@@ -334,7 +334,7 @@ contract ImpermanentGain is ERC20Mintable {
     // pay `amount` baseToken, get more that `min_a` of a
     function mintA(uint256 amount, uint256 min_a) external returns (uint256 _a) {
         require(canBuy, "cannot buy");
-        _a = getAmountOut(amount, poolB, poolA);
+        _a = getAmountOut(amount, poolB, poolA, fee());
         poolB = poolB.add(amount);
         poolA = poolA.sub(_a);
         emit Swap(msg.sender, false, amount, _a);
@@ -364,7 +364,7 @@ contract ImpermanentGain is ERC20Mintable {
     // pay `amount` baseToken, get more that `min_b` of b
     function mintB(uint256 amount, uint256 min_b) external returns (uint256 _b) {
         require(canBuy, "cannot buy");
-        _b = getAmountOut(amount, poolA, poolB);
+        _b = getAmountOut(amount, poolA, poolB, fee());
         poolA = poolA.add(amount);
         poolB = poolB.sub(_b);
         emit Swap(msg.sender, true, amount, _b);
@@ -432,7 +432,7 @@ contract ImpermanentGain is ERC20Mintable {
 
     function swapAtoB(uint256 _a, uint256 min_b) external returns (uint256 _b) {
         require(canBuy, "cannot buy");
-        _b = getAmountOut(_a, poolA, poolB);
+        _b = getAmountOut(_a, poolA, poolB, fee());
         require(_b >= min_b, "SLIPPAGE_DETECTED");
         poolA = poolA.add(_a);
         poolB = poolB.sub(_b);
@@ -443,7 +443,7 @@ contract ImpermanentGain is ERC20Mintable {
 
     function swapBtoA(uint256 _b, uint256 min_a) external returns (uint256 _a) {
         require(canBuy, "cannot buy");
-        _a = getAmountOut(_b, poolB, poolA);
+        _a = getAmountOut(_b, poolB, poolA, fee());
         require(_a >= min_a, "SLIPPAGE_DETECTED");
         poolB = poolB.add(_b);
         poolA = poolA.sub(_a);
