@@ -259,7 +259,7 @@ contract ImpermanentGain is ERC20Mintable {
 
         name = "iGain LP token";
         symbol = "iGLP";
-        decimals = 18;
+        decimals = ERC20Mintable(baseToken).decimals();
 
         uint256 _lp = _a.mul(_b).sqrt();
         poolA = _a;
