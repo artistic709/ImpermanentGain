@@ -331,7 +331,7 @@ contract ImpermanentGain is ERC20Mintable {
         doTransferOut(baseToken, msg.sender, amount);
     }
 
-    // pay `amount` baseToken, get more that `min_a` of a
+    // pay `amount` baseToken, get more than `min_a` of a
     function mintA(uint256 amount, uint256 min_a) external returns (uint256 _a) {
         require(canBuy, "cannot buy");
         _a = getAmountOut(amount, poolB, poolA, fee());
@@ -361,7 +361,7 @@ contract ImpermanentGain is ERC20Mintable {
         doTransferOut(baseToken, msg.sender, amount);
     }
 
-    // pay `amount` baseToken, get more that `min_b` of b
+    // pay `amount` baseToken, get more than `min_b` of b
     function mintB(uint256 amount, uint256 min_b) external returns (uint256 _b) {
         require(canBuy, "cannot buy");
         _b = getAmountOut(amount, poolA, poolB, fee());
