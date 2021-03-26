@@ -304,9 +304,9 @@ contract ImpermanentGain is ERC20Mintable {
         uint256 _fee;
         if(time > closeTime) _fee = maxFee;
         else {
-            _fee = closeTime.sub(time).mul(minFee).add(
-                time.sub(openTime).mul(maxFee)
-            ).div(closeTime.sub(openTime));
+            _fee = minFee.add(
+                time.sub(openTime).mul((maxFee.sub(minFee))).div(closeTime.sub(openTime))
+            );
         }
         return (1e18).sub(_fee);
     }
