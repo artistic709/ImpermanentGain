@@ -274,7 +274,7 @@ contract ImpermanentGain is ERC20Mintable {
             b[msg.sender] = _a.sub(_b);
             doTransferIn(baseToken, msg.sender, _a);
         }
-        emit AddLP(msg.sender, _lp, _a, _b);
+        emit AddLP(msg.sender, _a, _b, _lp);
     }
 
     function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut, uint256 f) internal pure returns (uint amountOut) {
@@ -406,7 +406,7 @@ contract ImpermanentGain is ERC20Mintable {
         poolB = poolB.add(amount);
         _mint(msg.sender, _lp);
         doTransferIn(baseToken, msg.sender, amount);
-        emit AddLP(msg.sender, _lp, amount, amount);
+        emit AddLP(msg.sender, amount, amount, _lp);
     }
 
     // burn `lp` of liquidity provider share, recieve more than `min_amount` of baseToken
@@ -422,7 +422,7 @@ contract ImpermanentGain is ERC20Mintable {
         poolB = poolB.sub(amount);
         _burn(msg.sender, lp);
         doTransferOut(baseToken, msg.sender, amount);
-        emit RemoveLP(msg.sender, lp, amount, amount);
+        emit RemoveLP(msg.sender, amount, amount, lp);
     }
 
 
@@ -473,7 +473,7 @@ contract ImpermanentGain is ERC20Mintable {
         a[msg.sender] = a[msg.sender].sub(_a);
         b[msg.sender] = b[msg.sender].sub(_b);
         _mint(msg.sender, _lp);
-        emit AddLP(msg.sender, _lp, _a, _b);
+        emit AddLP(msg.sender, _a, _b, _lp);
     }
 
     // burn no more than `max_lp` of liquidity provider share, withdraw `_a` of a and `_b` of b
@@ -492,7 +492,7 @@ contract ImpermanentGain is ERC20Mintable {
         a[msg.sender] = a[msg.sender].add(_a);
         b[msg.sender] = b[msg.sender].add(_b);
         _burn(msg.sender, _lp);
-        emit RemoveLP(msg.sender, _lp, _a, _b);
+        emit RemoveLP(msg.sender, _a, _b, _lp);
     }
 
 
@@ -532,7 +532,7 @@ contract ImpermanentGain is ERC20Mintable {
             poolA = poolA.sub(_a);
             poolB = poolB.sub(_b);
             _burn(msg.sender, _lp);
-            emit RemoveLP(msg.sender, _lp, _a, _b);
+            emit RemoveLP(msg.sender, _a, _b, _lp);
         }
 
         _a = _a.add(a[msg.sender]);
