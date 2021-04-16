@@ -397,7 +397,7 @@ contract ImpermanentGain is ERC20Mintable {
         uint256 k = poolA.mul(poolB).sqrt();
         uint256 _k = poolA.add(amount).mul(poolB.add(amount)).sqrt();
 
-        // ( sqrt(_k/k) - 1 ) * LP
+        // ( sqrt(_k)/sqrt(k) - 1 ) * LP
         _lp = _k.mul(1e18).div(k).sub(1e18).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(fee()).div(1e18); //fee
 
@@ -463,7 +463,7 @@ contract ImpermanentGain is ERC20Mintable {
         uint256 k = poolA.mul(poolB).sqrt();
         uint256 _k = poolA.add(_a).mul(poolB.add(_b)).sqrt();
 
-        // ( sqrt(_k/k) - 1 ) * LP
+        // ( sqrt(_k)/sqrt(k) - 1 ) * LP
         _lp = _k.mul(1e18).div(k).sub(1e18).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(fee()).div(1e18); //fee
 
@@ -482,7 +482,7 @@ contract ImpermanentGain is ERC20Mintable {
         uint256 k = poolA.mul(poolB).sqrt();
         uint256 _k = poolA.sub(_a).mul(poolB.sub(_b)).sqrt();
 
-        // ( 1 - sqrt(_k/k) ) * LP
+        // ( 1 - sqrt(_k)/sqrt(k) ) * LP
         _lp = (1e18).sub(_k.mul(1e18).div(k)).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(1e18).div(fee()); //fee
 
