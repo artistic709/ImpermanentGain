@@ -394,10 +394,10 @@ contract ImpermanentGain is ERC20Mintable {
     // pay `amount` baseToken, get more than `min_lp` liquidity provider share
     function mintLP(uint256 amount, uint256 min_lp) external returns (uint256 _lp) {
         require(canBuy, "cannot buy");
+
+        // _lp = ( sqrt(_k)/sqrt(k) - 1 ) * LP
         uint256 k = poolA.mul(poolB).sqrt();
         uint256 _k = poolA.add(amount).mul(poolB.add(amount)).sqrt();
-
-        // ( sqrt(_k)/sqrt(k) - 1 ) * LP
         _lp = _k.mul(1e18).div(k).sub(1e18).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(fee()).div(1e18); //fee
 
@@ -462,10 +462,10 @@ contract ImpermanentGain is ERC20Mintable {
     // deposit `_a` of a and `_b` of b, get more than `min_lp` of liquidity provider share
     function depositLP(uint256 _a, uint256 _b, uint256 min_lp) external returns (uint256 _lp) {
         require(canBuy, "cannot buy");
+
+        // _lp = ( sqrt(_k)/sqrt(k) - 1 ) * LP
         uint256 k = poolA.mul(poolB).sqrt();
         uint256 _k = poolA.add(_a).mul(poolB.add(_b)).sqrt();
-
-        // ( sqrt(_k)/sqrt(k) - 1 ) * LP
         _lp = _k.mul(1e18).div(k).sub(1e18).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(fee()).div(1e18); //fee
 
@@ -481,10 +481,10 @@ contract ImpermanentGain is ERC20Mintable {
     // burn no more than `max_lp` of liquidity provider share, withdraw `_a` of a and `_b` of b
     function withdrawLP(uint256 _a, uint256 _b, uint256 max_lp) external returns (uint256 _lp) {
         require(canBuy, "cannot buy");
+        
+        // _lp = ( 1 - sqrt(_k)/sqrt(k) ) * LP
         uint256 k = poolA.mul(poolB).sqrt();
         uint256 _k = poolA.sub(_a).mul(poolB.sub(_b)).sqrt();
-
-        // ( 1 - sqrt(_k)/sqrt(k) ) * LP
         _lp = (1e18).sub(_k.mul(1e18).div(k)).mul(_totalSupply).div(1e18);
         _lp = _lp.mul(1e18).div(fee()); //fee
 
