@@ -588,7 +588,13 @@ contract ERC20 is Context, IERC20 {
     }
 }
 
-abstract contract IGainBase is ERC20 {
+abstract contract Timestamp {
+    function _blockTimestamp() internal view virtual returns (uint256) {
+        return block.timestamp;
+    }
+}
+
+abstract contract IGainBase is ERC20, Timestamp {
     using SafeERC20 for IERC20;
 
     bool public canBuy;
@@ -639,8 +645,8 @@ abstract contract IGainBase is ERC20 {
         baseToken = _baseToken;
 
         treasury = _treasury;
-        openTime = block.timestamp;
-        closeTime = block.timestamp + _duration;
+        openTime = _blockTimestamp();
+        closeTime = _blockTimestamp() + _duration;
 
         canBuy = true;
 
@@ -651,17 +657,17 @@ abstract contract IGainBase is ERC20 {
         uint256 _lp = sqrt(_a * _b);
         poolA = _a;
         poolB = _b;
-        _mint(msg.sender, _lp);
+        _mint(_msgSender(), _lp);
         _mint(address(0), 1000); //lock liquidity 
         if(_b > _a) {
-            a[msg.sender] = _b - _a;
-            doTransferIn(baseToken, msg.sender, _b);
+            a[_msgSender()] = _b - _a;
+            doTransferIn(baseToken, _msgSender(), _b);
         }
         else {
-            b[msg.sender] = _a - _b;
-            doTransferIn(baseToken, msg.sender, _a);
+            b[_msgSender()] = _a - _b;
+            doTransferIn(baseToken, _msgSender(), _a);
         }
-        emit AddLP(msg.sender, _a, _b, _lp);
+        emit AddLP(_msgSender(), _a, _b, _lp);
     }
 
     function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut, uint256 f) internal pure returns (uint amountOut) {
@@ -687,7 +693,7 @@ abstract contract IGainBase is ERC20 {
 
     // 1 - swap fee (numerator, in 1e18 format)
     function fee() public view returns (uint256) {
-        uint256 time = block.timestamp;
+        uint256 time = _blockTimestamp();
         uint256 _fee;
         if(time < closeTime) {
             _fee = minFee + (
@@ -707,17 +713,17 @@ abstract contract IGainBase is ERC20 {
     // pay `amount` baseToken, get the same amount of a and b
     function mint(uint256 amount) external {
         require(canBuy, "cannot buy");
-        a[msg.sender] = a[msg.sender] + amount;
-        b[msg.sender] = b[msg.sender] + amount;
-        doTransferIn(baseToken, msg.sender, amount);
+        a[_msgSender()] = a[_msgSender()] + amount;
+        b[_msgSender()] = b[_msgSender()] + amount;
+        doTransferIn(baseToken, _msgSender(), amount);
     }
 
     // burn `amount` of a and b, get `amount` baseToken 
     function burn(uint256 amount) external {
         require(canBuy, "cannot buy");
-        a[msg.sender] = a[msg.sender] - amount;
-        b[msg.sender] = b[msg.sender] - amount;
-        doTransferOut(baseToken, msg.sender, amount);
+        a[_msgSender()] = a[_msgSender()] - amount;
+        b[_msgSender()] = b[_msgSender()] - amount;
+        doTransferOut(baseToken, _msgSender(), amount);
     }
 
     // pay `amount` baseToken, get more than `min_a` of a
@@ -726,11 +732,11 @@ abstract contract IGainBase is ERC20 {
         _a = getAmountOut(amount, poolB, poolA, fee());
         poolB = poolB + amount;
         poolA = poolA - _a;
-        emit Swap(msg.sender, false, amount, _a);
+        emit Swap(_msgSender(), false, amount, _a);
         _a = _a + amount;
         require(_a >= min_a, "SLIPPAGE_DETECTED");
-        a[msg.sender] = a[msg.sender] + _a;
-        doTransferIn(baseToken, msg.sender, amount);
+        a[_msgSender()] = a[_msgSender()] + _a;
+        doTransferIn(baseToken, _msgSender(), amount);
     }
 
     // burn `_a` of a, receive more than `min_amount` of baseToken
@@ -745,9 +751,9 @@ abstract contract IGainBase is ERC20 {
         // B = B - amount
         poolA = poolA + x;
         poolB = poolB - amount;
-        a[msg.sender] = a[msg.sender] - _a;
-        emit Swap(msg.sender, true, x, amount);
-        doTransferOut(baseToken, msg.sender, amount);
+        a[_msgSender()] = a[_msgSender()] - _a;
+        emit Swap(_msgSender(), true, x, amount);
+        doTransferOut(baseToken, _msgSender(), amount);
     }
 
     // pay `amount` baseToken, get more than `min_b` of b
@@ -756,11 +762,11 @@ abstract contract IGainBase is ERC20 {
         _b = getAmountOut(amount, poolA, poolB, fee());
         poolA = poolA + amount;
         poolB = poolB - _b;
-        emit Swap(msg.sender, true, amount, _b);
+        emit Swap(_msgSender(), true, amount, _b);
         _b = _b + amount;
         require(_b >= min_b, "SLIPPAGE_DETECTED");
-        b[msg.sender] = b[msg.sender] + _b;
-        doTransferIn(baseToken, msg.sender, amount);
+        b[_msgSender()] = b[_msgSender()] + _b;
+        doTransferIn(baseToken, _msgSender(), amount);
     }
 
     // burn `b` of b, receive more than `min_amount` of baseToken
@@ -775,9 +781,9 @@ abstract contract IGainBase is ERC20 {
         // A = A - amount
         poolB = poolB + x;
         poolA = poolA - amount;
-        b[msg.sender] = b[msg.sender] - _b;
-        emit Swap(msg.sender, false, x, amount);
-        doTransferOut(baseToken, msg.sender, amount);
+        b[_msgSender()] = b[_msgSender()] - _b;
+        emit Swap(_msgSender(), false, x, amount);
+        doTransferOut(baseToken, _msgSender(), amount);
     }
 
     // pay `amount` baseToken, get more than `min_lp` liquidity provider share
@@ -793,9 +799,9 @@ abstract contract IGainBase is ERC20 {
         require(_lp >= min_lp, "SLIPPAGE_DETECTED");
         poolA = poolA + amount;
         poolB = poolB + amount;
-        _mint(msg.sender, _lp);
-        doTransferIn(baseToken, msg.sender, amount);
-        emit AddLP(msg.sender, amount, amount, _lp);
+        _mint(_msgSender(), _lp);
+        doTransferIn(baseToken, _msgSender(), amount);
+        emit AddLP(_msgSender(), amount, amount, _lp);
     }
 
     // burn `lp` of liquidity provider share, recieve more than `min_amount` of baseToken
@@ -811,9 +817,9 @@ abstract contract IGainBase is ERC20 {
         require(amount >= min_amount, "SLIPPAGE_DETECTED");
         poolA = poolA - amount;
         poolB = poolB - amount;
-        _burn(msg.sender, lp);
-        doTransferOut(baseToken, msg.sender, amount);
-        emit RemoveLP(msg.sender, amount, amount, lp);
+        _burn(_msgSender(), lp);
+        doTransferOut(baseToken, _msgSender(), amount);
+        emit RemoveLP(_msgSender(), amount, amount, lp);
     }
 
     /***********************************|
@@ -826,9 +832,9 @@ abstract contract IGainBase is ERC20 {
         require(_b >= min_b, "SLIPPAGE_DETECTED");
         poolA = poolA + _a;
         poolB = poolB - _b;
-        a[msg.sender] = a[msg.sender] - _a;
-        b[msg.sender] = b[msg.sender] + _b;
-        emit Swap(msg.sender, true, _a, _b);
+        a[_msgSender()] = a[_msgSender()] - _a;
+        b[_msgSender()] = b[_msgSender()] + _b;
+        emit Swap(_msgSender(), true, _a, _b);
     }
 
     function swapBtoA(uint256 _b, uint256 min_a) external returns (uint256 _a) {
@@ -837,9 +843,9 @@ abstract contract IGainBase is ERC20 {
         require(_a >= min_a, "SLIPPAGE_DETECTED");
         poolB = poolB + _b;
         poolA = poolA - _a;
-        b[msg.sender] = b[msg.sender] - _b;
-        a[msg.sender] = a[msg.sender] + _a;
-        emit Swap(msg.sender, false, _b, _a);
+        b[_msgSender()] = b[_msgSender()] - _b;
+        a[_msgSender()] = a[_msgSender()] + _a;
+        emit Swap(_msgSender(), false, _b, _a);
     }
 
 
@@ -860,10 +866,10 @@ abstract contract IGainBase is ERC20 {
         require(_lp >= min_lp, "SLIPPAGE_DETECTED");
         poolA = poolA + _a;
         poolB = poolB + _b;
-        a[msg.sender] = a[msg.sender] - _a;
-        b[msg.sender] = b[msg.sender] - _b;
-        _mint(msg.sender, _lp);
-        emit AddLP(msg.sender, _a, _b, _lp);
+        a[_msgSender()] = a[_msgSender()] - _a;
+        b[_msgSender()] = b[_msgSender()] - _b;
+        _mint(_msgSender(), _lp);
+        emit AddLP(_msgSender(), _a, _b, _lp);
     }
 
     // burn no more than `max_lp` of liquidity provider share, withdraw `_a` of a and `_b` of b
@@ -879,10 +885,10 @@ abstract contract IGainBase is ERC20 {
         require(_lp <= max_lp, "SLIPPAGE_DETECTED");
         poolA = poolA - _a;
         poolB = poolB - _b;
-        a[msg.sender] = a[msg.sender] + _a;
-        b[msg.sender] = b[msg.sender] + _b;
-        _burn(msg.sender, _lp);
-        emit RemoveLP(msg.sender, _a, _b, _lp);
+        a[_msgSender()] = a[_msgSender()] + _a;
+        b[_msgSender()] = b[_msgSender()] + _b;
+        _burn(_msgSender(), _lp);
+        emit RemoveLP(_msgSender(), _a, _b, _lp);
     }
 
 
@@ -898,7 +904,7 @@ abstract contract IGainBase is ERC20 {
     function claim() external returns (uint256 amount) {
         require(!canBuy, "Not yet");
 
-        uint256 _lp = _balances[msg.sender];
+        uint256 _lp = _balances[_msgSender()];
         uint256 _a;
         uint256 _b;
 
@@ -908,17 +914,17 @@ abstract contract IGainBase is ERC20 {
 
             poolA = poolA - _a;
             poolB = poolB - _b;
-            _burn(msg.sender, _lp);
-            emit RemoveLP(msg.sender, _a, _b, _lp);
+            _burn(_msgSender(), _lp);
+            emit RemoveLP(_msgSender(), _a, _b, _lp);
         }
 
-        _a = _a + a[msg.sender];
-        _b = _b + b[msg.sender];
-        a[msg.sender] = 0;
-        b[msg.sender] = 0;
+        _a = _a + a[_msgSender()];
+        _b = _b + b[_msgSender()];
+        a[_msgSender()] = 0;
+        b[_msgSender()] = 0;
 
         amount = (_a * (1e18 - bPrice) + _b * bPrice) / 1e18;
-        doTransferOut(baseToken, msg.sender, amount);
+        doTransferOut(baseToken, _msgSender(), amount);
     }
 
 
