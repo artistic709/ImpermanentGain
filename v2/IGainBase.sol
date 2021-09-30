@@ -588,6 +588,15 @@ contract ERC20 is Context, IERC20 {
     }
 }
 
+interface ERC20Mintable is IERC20 {
+    function mint(address to, uint256 amount) external;
+    function burn(address from, uint256 amount) external;
+}
+
+interface TokenFactory {
+    function newToken(address _owner, string calldata _name, string calldata _symbol, uint8 _decimals) external returns (address token);
+}
+
 abstract contract Timestamp {
     function _blockTimestamp() internal view virtual returns (uint256) {
         return block.timestamp;
@@ -601,6 +610,11 @@ abstract contract IGainBase is ERC20, Timestamp {
 
     address public treasury;
     address public baseToken;
+
+    TokenFactory public constant Factory = TokenFactory(0x2eFC352936d5c52B3Ee061367c834BF768F11715);
+
+    ERC20Mintable public a;
+    ERC20Mintable public b;
 
     uint256 public openTime;
     uint256 public closeTime;
@@ -617,9 +631,6 @@ abstract contract IGainBase is ERC20, Timestamp {
 
     uint256 public poolA;
     uint256 public poolB;
-
-    mapping(address => uint256) public a;
-    mapping(address => uint256) public b;
 
     event Mint(address indexed minter, uint256 amount);
     event Burn(address indexed burner, uint256 amount);
@@ -654,17 +665,20 @@ abstract contract IGainBase is ERC20, Timestamp {
         symbol = "iGLP";
         decimals = ERC20(baseToken).decimals();
 
+        a = ERC20Mintable(Factory.newToken(address(this), "iGain A token", "iG-A", decimals));
+        b = ERC20Mintable(Factory.newToken(address(this), "iGain B token", "iG-B", decimals));
+
         uint256 _lp = sqrt(_a * _b);
         poolA = _a;
         poolB = _b;
         _mint(_msgSender(), _lp);
         _mint(address(0), 1000); //lock liquidity 
         if(_b > _a) {
-            a[_msgSender()] = _b - _a;
+            a.mint(_msgSender(), _b - _a);
             doTransferIn(baseToken, _msgSender(), _b);
         }
         else {
-            b[_msgSender()] = _a - _b;
+            b.mint(_msgSender(), _a - _b);
             doTransferIn(baseToken, _msgSender(), _a);
         }
         emit AddLP(_msgSender(), _a, _b, _lp);
@@ -713,16 +727,16 @@ abstract contract IGainBase is ERC20, Timestamp {
     // pay `amount` baseToken, get the same amount of a and b
     function mint(uint256 amount) external {
         require(canBuy, "cannot buy");
-        a[_msgSender()] = a[_msgSender()] + amount;
-        b[_msgSender()] = b[_msgSender()] + amount;
+        a.mint(_msgSender(), amount);
+        b.mint(_msgSender(), amount);
         doTransferIn(baseToken, _msgSender(), amount);
     }
 
     // burn `amount` of a and b, get `amount` baseToken 
     function burn(uint256 amount) external {
         require(canBuy, "cannot buy");
-        a[_msgSender()] = a[_msgSender()] - amount;
-        b[_msgSender()] = b[_msgSender()] - amount;
+        a.burn(_msgSender(), amount);
+        b.burn(_msgSender(), amount);
         doTransferOut(baseToken, _msgSender(), amount);
     }
 
@@ -735,7 +749,7 @@ abstract contract IGainBase is ERC20, Timestamp {
         emit Swap(_msgSender(), false, amount, _a);
         _a = _a + amount;
         require(_a >= min_a, "SLIPPAGE_DETECTED");
-        a[_msgSender()] = a[_msgSender()] + _a;
+        a.mint(_msgSender(), _a);
         doTransferIn(baseToken, _msgSender(), amount);
     }
 
@@ -751,7 +765,7 @@ abstract contract IGainBase is ERC20, Timestamp {
         // B = B - amount
         poolA = poolA + x;
         poolB = poolB - amount;
-        a[_msgSender()] = a[_msgSender()] - _a;
+        a.burn(_msgSender(), _a);
         emit Swap(_msgSender(), true, x, amount);
         doTransferOut(baseToken, _msgSender(), amount);
     }
@@ -765,7 +779,7 @@ abstract contract IGainBase is ERC20, Timestamp {
         emit Swap(_msgSender(), true, amount, _b);
         _b = _b + amount;
         require(_b >= min_b, "SLIPPAGE_DETECTED");
-        b[_msgSender()] = b[_msgSender()] + _b;
+        b.mint(_msgSender(), _b);
         doTransferIn(baseToken, _msgSender(), amount);
     }
 
@@ -781,7 +795,7 @@ abstract contract IGainBase is ERC20, Timestamp {
         // A = A - amount
         poolB = poolB + x;
         poolA = poolA - amount;
-        b[_msgSender()] = b[_msgSender()] - _b;
+        b.burn(_msgSender(), _b);
         emit Swap(_msgSender(), false, x, amount);
         doTransferOut(baseToken, _msgSender(), amount);
     }
@@ -832,8 +846,8 @@ abstract contract IGainBase is ERC20, Timestamp {
         require(_b >= min_b, "SLIPPAGE_DETECTED");
         poolA = poolA + _a;
         poolB = poolB - _b;
-        a[_msgSender()] = a[_msgSender()] - _a;
-        b[_msgSender()] = b[_msgSender()] + _b;
+        a.burn(_msgSender(), _a);
+        b.mint(_msgSender(), _b);
         emit Swap(_msgSender(), true, _a, _b);
     }
 
@@ -843,8 +857,8 @@ abstract contract IGainBase is ERC20, Timestamp {
         require(_a >= min_a, "SLIPPAGE_DETECTED");
         poolB = poolB + _b;
         poolA = poolA - _a;
-        b[_msgSender()] = b[_msgSender()] - _b;
-        a[_msgSender()] = a[_msgSender()] + _a;
+        b.burn(_msgSender(), _b);
+        a.mint(_msgSender(), _a);
         emit Swap(_msgSender(), false, _b, _a);
     }
 
@@ -866,8 +880,8 @@ abstract contract IGainBase is ERC20, Timestamp {
         require(_lp >= min_lp, "SLIPPAGE_DETECTED");
         poolA = poolA + _a;
         poolB = poolB + _b;
-        a[_msgSender()] = a[_msgSender()] - _a;
-        b[_msgSender()] = b[_msgSender()] - _b;
+        a.burn(_msgSender(), _a);
+        b.burn(_msgSender(), _b);
         _mint(_msgSender(), _lp);
         emit AddLP(_msgSender(), _a, _b, _lp);
     }
@@ -885,8 +899,8 @@ abstract contract IGainBase is ERC20, Timestamp {
         require(_lp <= max_lp, "SLIPPAGE_DETECTED");
         poolA = poolA - _a;
         poolB = poolB - _b;
-        a[_msgSender()] = a[_msgSender()] + _a;
-        b[_msgSender()] = b[_msgSender()] + _b;
+        a.mint(_msgSender(), _a);
+        b.mint(_msgSender(), _b);
         _burn(_msgSender(), _lp);
         emit RemoveLP(_msgSender(), _a, _b, _lp);
     }
@@ -905,23 +919,23 @@ abstract contract IGainBase is ERC20, Timestamp {
         require(!canBuy, "Not yet");
 
         uint256 _lp = _balances[_msgSender()];
-        uint256 _a;
-        uint256 _b;
+        uint256 _a = a.balanceOf(_msgSender());
+        uint256 _b = b.balanceOf(_msgSender());
+
+        a.burn(_msgSender(), _a);
+        b.burn(_msgSender(), _b);
 
         if(_lp > 0) {
-            _a = poolA * _lp / _totalSupply;   
-            _b = poolB * _lp / _totalSupply;
+            uint256 __a = poolA * _lp / _totalSupply;
+            uint256 __b = poolB * _lp / _totalSupply;
 
-            poolA = poolA - _a;
-            poolB = poolB - _b;
+            poolA = poolA - __a;
+            poolB = poolB - __b;
+            _a = _a + __a;
+            _b = _b + __b;
             _burn(_msgSender(), _lp);
             emit RemoveLP(_msgSender(), _a, _b, _lp);
         }
-
-        _a = _a + a[_msgSender()];
-        _b = _b + b[_msgSender()];
-        a[_msgSender()] = 0;
-        b[_msgSender()] = 0;
 
         amount = (_a * (1e18 - bPrice) + _b * bPrice) / 1e18;
         doTransferOut(baseToken, _msgSender(), amount);
