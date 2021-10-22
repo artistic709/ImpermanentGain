@@ -1,3 +1,4 @@
+// Run tsc to genenrate js version for remix
 import * as dotenv from "dotenv";
 
 import { HardhatUserConfig, task } from "hardhat/config";
@@ -25,6 +26,12 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 const config: HardhatUserConfig = {
   solidity: "0.8.7",
   networks: {
+    hardhat: {
+      forking: {
+        url: process.env.FORKING_URL || "",
+        // blockNumber: 13464910,
+      },
+    },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
       accounts:

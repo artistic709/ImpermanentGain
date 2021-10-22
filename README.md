@@ -41,3 +41,18 @@ npx hardhat verify --network ropsten DEPLOYED_CONTRACT_ADDRESS "Hello, Hardhat!"
 # Performance optimizations
 
 For faster runs of your tests and scripts, consider skipping ts-node's type checking by setting the environment variable `TS_NODE_TRANSPILE_ONLY` to `1` in hardhat's environment. For more details see [the documentation](https://hardhat.org/guides/typescript.html#performance-optimizations).
+
+# Remix Setup
+1. Run `npm run serve`  
+This will start `remixd` that installed with `npm install`
+2. Open [Remix IDE](https://remix.ethereum.org/)
+3. Activate `Remixd` plugin, then you can access codes now
+4. It's recommand not to check `Auto Compile` and `Enable Hardhat Compilation` at the same time
+5. If errors saying writing conflicts on metadatas keep popping, turn off `Generate contract metadata` in Setting may help
+
+# Local node setup
+1. Create or modify `.env`, set `FORKING_URL` to a endpoint
+2. Run `npx hardhat node`
+3. Now you can connect to localhost:8545 and that will fork the state of mainnet
+4. You can activate `Hardhat Provider` plugin in remix and select `Hardhat Provider` in Environment to deploy
+5. To lock the forking block, umcomment the `blockNumber` config in `hardhat.config.ts` and change it

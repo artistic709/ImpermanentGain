@@ -2,3 +2,7 @@ node_modules
 artifacts
 cache
 coverage
+
+# Auto generated files for remix
+hardhat.config.js
+remix-compiler.config.js
