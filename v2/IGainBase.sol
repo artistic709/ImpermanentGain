@@ -650,7 +650,7 @@ abstract contract IGainBase is ERC20, Timestamp {
     }
 
     // initializer, derived contracts must call this in its public init() function
-    function _init(address _baseToken, address _treasury, uint256 _duration, uint256 _a, uint256 _b) internal {
+    function _init(address _baseToken, address _treasury, string memory _batchName, uint256 _duration, uint256 _a, uint256 _b) internal {
         require(openTime == 0, "Initialized");
         require(_a > 0 && _b > 0, "No initial liquidity");
         baseToken = _baseToken;
@@ -661,12 +661,12 @@ abstract contract IGainBase is ERC20, Timestamp {
 
         canBuy = true;
 
-        name = "iGain LP token";
-        symbol = "iGLP";
+        name = string(abi.encodePacked("iGain LP token ", _batchName));
+        symbol = string(abi.encodePacked("iGLP ", _batchName));
         decimals = ERC20(baseToken).decimals();
 
-        a = ERC20Mintable(Factory.newToken(address(this), "iGain A token", "iG-A", decimals));
-        b = ERC20Mintable(Factory.newToken(address(this), "iGain B token", "iG-B", decimals));
+        a = ERC20Mintable(Factory.newToken(address(this), string(abi.encodePacked("iGain A token ", _batchName)), string(abi.encodePacked("iG-A ", _batchName)), decimals));
+        b = ERC20Mintable(Factory.newToken(address(this), string(abi.encodePacked("iGain B token ", _batchName)), string(abi.encodePacked("iG-B ", _batchName)), decimals));
 
         uint256 _lp = sqrt(_a * _b);
         poolA = _a;
