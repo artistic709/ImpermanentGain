@@ -697,8 +697,8 @@ abstract contract IGainBase is ERC20, Timestamp {
         amountIn = numerator / denominator + 1;
     }
 
-    // calculate how many of a needs to be swapped for b when burning a
-    function burnPartialHelper(uint256 amountIn, uint256 reserveIn, uint256 reserveOut, uint256 f) internal pure returns (uint256 x) {
+    // calculate how many token needs to be swapped when minting/burning
+    function swapPartialHelper(uint256 amountIn, uint256 reserveIn, uint256 reserveOut, uint256 f) internal pure returns (uint256 x) {
         uint256 r = amountIn * 4 * reserveIn * f / 1e18; //prevent stack too deep
         x = (reserveOut - amountIn) * f / 1e18 + reserveIn; // (reserveOut - a) * fee + reserveIn
         x = sqrt(x * x + r) - x;
@@ -753,11 +753,28 @@ abstract contract IGainBase is ERC20, Timestamp {
         doTransferIn(baseToken, _msgSender(), amount);
     }
 
+    // mint `_a` of a, pay no more than `max_amount` of baseToken
+    function mintExactA(uint256 _a, uint256 max_amount) external returns (uint256 amount) {
+        require(canBuy, "cannot buy");
+        // amount = _a - y
+        uint256 y = swapPartialHelper(_a, poolB, poolA, fee());
+        amount = _a - y;
+        require(amount <= max_amount, "SLIPPAGE_DETECTED");
+        
+        // A = A - amount
+        // B = B + y
+        poolA = poolA - amount;
+        poolB = poolB + y;
+        a.mint(_msgSender(), _a);
+        emit Swap(_msgSender(), false, amount, _a);
+        doTransferIn(baseToken, _msgSender(), amount);
+    }
+
     // burn `_a` of a, receive more than `min_amount` of baseToken
     function burnA(uint256 _a, uint256 min_amount) external returns (uint256 amount) {
         require(canBuy, "cannot buy");
         // amount = _a - x
-        uint256 x = burnPartialHelper(_a, poolA, poolB, fee());
+        uint256 x = swapPartialHelper(_a, poolA, poolB, fee());
         amount = _a - x;
         require(amount >= min_amount, "SLIPPAGE_DETECTED");
         
@@ -783,11 +800,28 @@ abstract contract IGainBase is ERC20, Timestamp {
         doTransferIn(baseToken, _msgSender(), amount);
     }
 
+    // mint `_b` of b, pay no more than `max_amount` of baseToken
+    function mintExactB(uint256 _b, uint256 max_amount) external returns (uint256 amount) {
+        require(canBuy, "cannot buy");
+        // amount = _b - y
+        uint256 y = swapPartialHelper(_b, poolA, poolB, fee());
+        amount = _b - y;
+        require(amount <= max_amount, "SLIPPAGE_DETECTED");
+        
+        // B = B - amount
+        // A = A + y
+        poolB = poolB - amount;
+        poolA = poolA + y;
+        b.mint(_msgSender(), _b);
+        emit Swap(_msgSender(), true, amount, _b);
+        doTransferIn(baseToken, _msgSender(), amount);
+    }
+
     // burn `b` of b, receive more than `min_amount` of baseToken
     function burnB(uint256 _b, uint256 min_amount) external returns (uint256 amount) {
         require(canBuy, "cannot buy");
         // amount = _b - x
-        uint256 x = burnPartialHelper(_b, poolB, poolA, fee());
+        uint256 x = swapPartialHelper(_b, poolB, poolA, fee());
         amount = _b - x;
         require(amount >= min_amount, "SLIPPAGE_DETECTED");
         
