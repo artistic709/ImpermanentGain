@@ -29,8 +29,9 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: process.env.FORKING_URL || "",
-        // blockNumber: 13464910,
+        blockNumber: parseInt(process.env.BLOCK_NUMBER || "13464910"),
       },
+      allowUnlimitedContractSize: true,
     },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
@@ -44,6 +45,9 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
+  },
+  mocha: {
+    timeout: 200000,
   },
 };
 
