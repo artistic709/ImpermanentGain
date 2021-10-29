@@ -756,17 +756,16 @@ abstract contract IGainBase is ERC20, Timestamp {
     // mint `_a` of a, pay no more than `max_amount` of baseToken
     function mintExactA(uint256 _a, uint256 max_amount) external returns (uint256 amount) {
         require(canBuy, "cannot buy");
-        // amount = _a - y
-        uint256 y = swapPartialHelper(_a, poolB, poolA, fee());
-        amount = _a - y;
+        amount = swapPartialHelper(_a, poolB, poolA, fee());
         require(amount <= max_amount, "SLIPPAGE_DETECTED");
-        
-        // A = A - amount
-        // B = B + y
-        poolA = poolA - amount;
-        poolB = poolB + y;
+        // y = _a - amount
+        uint256 y = _a - amount;
+        // A = A - y
+        // B = B + amount
+        poolA = poolA - y;
+        poolB = poolB + amount;
         a.mint(_msgSender(), _a);
-        emit Swap(_msgSender(), false, amount, _a);
+        emit Swap(_msgSender(), false, amount, y);
         doTransferIn(baseToken, _msgSender(), amount);
     }
 
@@ -803,17 +802,16 @@ abstract contract IGainBase is ERC20, Timestamp {
     // mint `_b` of b, pay no more than `max_amount` of baseToken
     function mintExactB(uint256 _b, uint256 max_amount) external returns (uint256 amount) {
         require(canBuy, "cannot buy");
-        // amount = _b - y
-        uint256 y = swapPartialHelper(_b, poolA, poolB, fee());
-        amount = _b - y;
+        amount = swapPartialHelper(_b, poolA, poolB, fee());
         require(amount <= max_amount, "SLIPPAGE_DETECTED");
-        
-        // B = B - amount
-        // A = A + y
-        poolB = poolB - amount;
-        poolA = poolA + y;
+        // y = _b - amount
+        uint256 y = _b - amount;
+        // B = B - y
+        // A = A + amount
+        poolB = poolB - y;
+        poolA = poolA + amount;
         b.mint(_msgSender(), _b);
-        emit Swap(_msgSender(), true, amount, _b);
+        emit Swap(_msgSender(), true, amount, y);
         doTransferIn(baseToken, _msgSender(), amount);
     }
 
