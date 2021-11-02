@@ -10,6 +10,13 @@ import { getAddress } from "@ethersproject/address";
 import BN from "bignumber.js";
 
 use(chaiAsPromised);
+const e18 = BigNumber.from("10").pow(18);
+
+function sqrt(value: BigNumber): BigNumber {
+  return BigNumber.from(
+    new BN(value.toString()).sqrt().integerValue(BN.ROUND_FLOOR).toString(10)
+  );
+}
 
 function getFee(
   openTime: BigNumber,
@@ -18,7 +25,7 @@ function getFee(
   minFee: BigNumber,
   maxFee: BigNumber
 ): BigNumber {
-  if (closeTime.lte(openTime)) return BigNumber.from("10").pow(18).sub(maxFee);
+  if (closeTime.lte(openTime)) return e18.sub(maxFee);
   return BigNumber.from("10")
     .pow(18)
     .sub(
@@ -35,9 +42,11 @@ describe("IGainAAVEIRS", function () {
   const amount = BigNumber.from(parseUnits("10000"));
   let IGainAAVEIRS: IGainAAVEIRS;
   let IGainAAVEIRSUser: IGainAAVEIRS;
+  let IGainAAVEIRSUser2: IGainAAVEIRS;
   let accounts: SignerWithAddress[];
   let operator: SignerWithAddress;
   let user: SignerWithAddress;
+  let user2: SignerWithAddress;
   let base: ERC20Mintable;
   let aContract: ERC20Mintable;
   let bContract: ERC20Mintable;
@@ -58,12 +67,14 @@ describe("IGainAAVEIRS", function () {
     accounts = await ethers.getSigners();
     operator = accounts[0];
     user = accounts[1];
+    user2 = accounts[2];
 
     const IGainAAVEIRSDeployer = await ethers.getContractFactory(
       "IGainAAVEIRS"
     );
     IGainAAVEIRS = await IGainAAVEIRSDeployer.deploy();
     IGainAAVEIRSUser = IGainAAVEIRS.connect(user);
+    IGainAAVEIRSUser2 = IGainAAVEIRS.connect(user2);
     await IGainAAVEIRS.deployed();
 
     base = await ethers.getContractAt(
@@ -223,28 +234,43 @@ describe("IGainAAVEIRS", function () {
       const mintAmount = amount.div(9);
 
       it("Should mintable for a and b", async function () {
-        const [userABalance, userBBalance, contractBaseBalance] =
-          await Promise.all([
-            aContract.balanceOf(user.address),
-            bContract.balanceOf(user.address),
-            base.balanceOf(IGainAAVEIRS.address),
-          ]);
+        const [
+          userABalance,
+          userBBalance,
+          contractBaseBalance,
+          userBaseBalance,
+        ] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          base.balanceOf(IGainAAVEIRS.address),
+          base.balanceOf(user.address),
+        ]);
         await IGainAAVEIRSUser.mint(mintAmount);
 
-        const [newUserABalance, newUserBBalance, newContractBaseBalance] =
-          await Promise.all([
-            aContract.balanceOf(user.address),
-            bContract.balanceOf(user.address),
-            base.balanceOf(IGainAAVEIRS.address),
-          ]);
+        const [
+          newUserABalance,
+          newUserBBalance,
+          newContractBaseBalance,
+          newUserBaseBalance,
+        ] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          base.balanceOf(IGainAAVEIRS.address),
+          base.balanceOf(user.address),
+        ]);
         expect(contractBaseBalance.add(mintAmount)).equal(
           newContractBaseBalance
         );
         expect(userABalance.add(mintAmount)).equal(newUserABalance);
         expect(userBBalance.add(mintAmount)).equal(newUserBBalance);
+        expect(userBaseBalance.sub(mintAmount)).equal(newUserBaseBalance);
       });
 
-      it("Should not mintable for a and b without sufficient balance");
+      it("Should not mintable for a and b without sufficient balance", async function () {
+        await expect(IGainAAVEIRSUser2.mint("1")).eventually.be.rejectedWith(
+          getRevertError("Dai/insufficient-balance")
+        );
+      });
 
       it("Should mintable for a", async function () {
         const [userABalance, userBBalance, contractBaseBalance] =
@@ -260,7 +286,8 @@ describe("IGainAAVEIRS", function () {
           IGainAAVEIRS.minFee(),
           IGainAAVEIRS.maxFee(),
         ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
         const [poolA, poolB] = await Promise.all([
           IGainAAVEIRS.poolA(),
@@ -270,9 +297,7 @@ describe("IGainAAVEIRS", function () {
           mintAmount
             .mul(fee)
             .mul(poolA)
-            .div(
-              poolB.mul(BigNumber.from("10").pow(18)).add(mintAmount.mul(fee))
-            )
+            .div(poolB.mul(e18).add(mintAmount.mul(fee)))
         );
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
@@ -291,7 +316,13 @@ describe("IGainAAVEIRS", function () {
         expect(userBBalance).equal(newUserBBalance);
       });
 
-      it("Should not mintable for a without sufficient balance");
+      it("Should not mintable for a and b without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.mintA("1", "0")
+        ).eventually.be.rejectedWith(
+          getRevertError("Dai/insufficient-balance")
+        );
+      });
 
       it("Should revert when cannot mint a more than desired", async function () {
         const [openTime, closeTime, minFee, maxFee] = await Promise.all([
@@ -300,7 +331,8 @@ describe("IGainAAVEIRS", function () {
           IGainAAVEIRS.minFee(),
           IGainAAVEIRS.maxFee(),
         ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
         const [poolA, poolB] = await Promise.all([
           IGainAAVEIRS.poolA(),
@@ -310,9 +342,7 @@ describe("IGainAAVEIRS", function () {
           mintAmount
             .mul(fee)
             .mul(poolA)
-            .div(
-              poolB.mul(BigNumber.from("10").pow(18)).add(mintAmount.mul(fee))
-            )
+            .div(poolB.mul(e18).add(mintAmount.mul(fee)))
         );
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
@@ -338,25 +368,22 @@ describe("IGainAAVEIRS", function () {
           IGainAAVEIRS.minFee(),
           IGainAAVEIRS.maxFee(),
         ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
         const [poolA, poolB] = await Promise.all([
           IGainAAVEIRS.poolA(),
           IGainAAVEIRS.poolB(),
         ]);
-        const maxOut = mintAmount.add(
-          mintAmount
-            .mul(fee)
-            .mul(poolA)
-            .div(
-              poolB.mul(BigNumber.from("10").pow(18)).add(mintAmount.mul(fee))
-            )
-        );
+        const correctOut = poolA.div(2);
+        const r = correctOut.mul(4).mul(poolB).mul(fee).div(e18);
+        const x = poolA.sub(correctOut).mul(fee).div(e18).add(poolB);
+        const amount = sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee);
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
 
-        // await IGainAAVEIRSUser.mintA(mintAmount, maxOut);
-        await IGainAAVEIRSUser.mintExactA(maxOut, mintAmount);
+        // await IGainAAVEIRSUser.mintA(amount, maxOut);
+        await IGainAAVEIRSUser.mintExactA(correctOut, amount);
 
         const [newUserABalance, newUserBBalance, newContractBaseBalance] =
           await Promise.all([
@@ -364,10 +391,8 @@ describe("IGainAAVEIRS", function () {
             bContract.balanceOf(user.address),
             base.balanceOf(IGainAAVEIRS.address),
           ]);
-        expect(contractBaseBalance.add(mintAmount)).equal(
-          newContractBaseBalance
-        );
-        expect(userABalance.add(maxOut)).equal(newUserABalance);
+        expect(contractBaseBalance.add(amount)).equal(newContractBaseBalance);
+        expect(userABalance.add(correctOut)).equal(newUserABalance);
         expect(userBBalance).equal(newUserBBalance);
       });
 
@@ -378,31 +403,29 @@ describe("IGainAAVEIRS", function () {
           IGainAAVEIRS.minFee(),
           IGainAAVEIRS.maxFee(),
         ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
         const [poolA, poolB] = await Promise.all([
           IGainAAVEIRS.poolA(),
           IGainAAVEIRS.poolB(),
         ]);
-        const maxOut = mintAmount.add(
-          mintAmount
-            .mul(fee)
-            .mul(poolA)
-            .div(
-              poolB.mul(BigNumber.from("10").pow(18)).add(mintAmount.mul(fee))
-            )
-        );
+        const correctOut = poolA.div(2);
+        const r = correctOut.mul(4).mul(poolB).mul(fee).div(e18);
+        const x = poolA.sub(correctOut).mul(fee).div(e18).add(poolB);
+        const amount = sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee);
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
 
+        // await IGainAAVEIRSUser.mintA(amount, maxOut);
         await expect(
-          IGainAAVEIRSUser.mintExactA(maxOut.add(1), mintAmount)
+          IGainAAVEIRSUser.mintExactA(correctOut.add(1), amount)
         ).eventually.be.rejectedWith(
           Error,
           getRevertError("SLIPPAGE_DETECTED")
         );
         await expect(
-          IGainAAVEIRSUser.mintExactA(maxOut, mintAmount.sub(1))
+          IGainAAVEIRSUser.mintExactA(correctOut, amount.sub(1))
         ).eventually.be.rejectedWith(
           Error,
           getRevertError("SLIPPAGE_DETECTED")
@@ -423,7 +446,8 @@ describe("IGainAAVEIRS", function () {
           IGainAAVEIRS.minFee(),
           IGainAAVEIRS.maxFee(),
         ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
         const [poolA, poolB] = await Promise.all([
           IGainAAVEIRS.poolA(),
@@ -433,9 +457,7 @@ describe("IGainAAVEIRS", function () {
           mintAmount
             .mul(fee)
             .mul(poolB)
-            .div(
-              poolA.mul(BigNumber.from("10").pow(18)).add(mintAmount.mul(fee))
-            )
+            .div(poolA.mul(e18).add(mintAmount.mul(fee)))
         );
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
@@ -454,7 +476,13 @@ describe("IGainAAVEIRS", function () {
         expect(userABalance).equal(newUserABalance);
       });
 
-      it("Should not mintable for b without sufficient balance");
+      it("Should not mintable for b without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.mintB("1", "0")
+        ).eventually.be.rejectedWith(
+          getRevertError("Dai/insufficient-balance")
+        );
+      });
 
       it("Should revert when cannot mint b more than desired", async function () {
         const [openTime, closeTime, minFee, maxFee] = await Promise.all([
@@ -463,7 +491,8 @@ describe("IGainAAVEIRS", function () {
           IGainAAVEIRS.minFee(),
           IGainAAVEIRS.maxFee(),
         ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
         const [poolA, poolB] = await Promise.all([
           IGainAAVEIRS.poolA(),
@@ -473,9 +502,7 @@ describe("IGainAAVEIRS", function () {
           mintAmount
             .mul(fee)
             .mul(poolB)
-            .div(
-              poolA.mul(BigNumber.from("10").pow(18)).add(mintAmount.mul(fee))
-            )
+            .div(poolA.mul(e18).add(mintAmount.mul(fee)))
         );
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
@@ -501,25 +528,22 @@ describe("IGainAAVEIRS", function () {
           IGainAAVEIRS.minFee(),
           IGainAAVEIRS.maxFee(),
         ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
         const [poolA, poolB] = await Promise.all([
           IGainAAVEIRS.poolA(),
           IGainAAVEIRS.poolB(),
         ]);
-        const maxOut = mintAmount.add(
-          mintAmount
-            .mul(fee)
-            .mul(poolB)
-            .div(
-              poolA.mul(BigNumber.from("10").pow(18)).add(mintAmount.mul(fee))
-            )
-        );
+        const correctOut = poolB.div(2);
+        const r = correctOut.mul(4).mul(poolA).mul(fee).div(e18);
+        const x = poolB.sub(correctOut).mul(fee).div(e18).add(poolA);
+        const amount = sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee);
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
 
-        // await IGainAAVEIRSUser.mintA(mintAmount, maxOut);
-        await IGainAAVEIRSUser.mintExactB(maxOut, mintAmount);
+        // await IGainAAVEIRSUser.mintA(amount, maxOut);
+        await IGainAAVEIRSUser.mintExactB(correctOut, amount);
 
         const [newUserABalance, newUserBBalance, newContractBaseBalance] =
           await Promise.all([
@@ -527,11 +551,9 @@ describe("IGainAAVEIRS", function () {
             bContract.balanceOf(user.address),
             base.balanceOf(IGainAAVEIRS.address),
           ]);
-        expect(contractBaseBalance.add(mintAmount)).equal(
-          newContractBaseBalance
-        );
-        expect(userBBalance.add(maxOut)).equal(newUserBBalance);
+        expect(contractBaseBalance.add(amount)).equal(newContractBaseBalance);
         expect(userABalance).equal(newUserABalance);
+        expect(userBBalance.add(correctOut)).equal(newUserBBalance);
       });
 
       it("Should revert when cannot mint b as desired", async function () {
@@ -541,31 +563,29 @@ describe("IGainAAVEIRS", function () {
           IGainAAVEIRS.minFee(),
           IGainAAVEIRS.maxFee(),
         ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
         const [poolA, poolB] = await Promise.all([
           IGainAAVEIRS.poolA(),
           IGainAAVEIRS.poolB(),
         ]);
-        const maxOut = mintAmount.add(
-          mintAmount
-            .mul(fee)
-            .mul(poolB)
-            .div(
-              poolA.mul(BigNumber.from("10").pow(18)).add(mintAmount.mul(fee))
-            )
-        );
+        const correctOut = poolB.div(2);
+        const r = correctOut.mul(4).mul(poolA).mul(fee).div(e18);
+        const x = poolB.sub(correctOut).mul(fee).div(e18).add(poolA);
+        const amount = sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee);
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
 
+        // await IGainAAVEIRSUser.mintA(amount, maxOut);
         await expect(
-          IGainAAVEIRSUser.mintExactB(maxOut.add(1), mintAmount)
+          IGainAAVEIRSUser.mintExactB(correctOut.add(1), amount)
         ).eventually.be.rejectedWith(
           Error,
           getRevertError("SLIPPAGE_DETECTED")
         );
         await expect(
-          IGainAAVEIRSUser.mintExactB(maxOut, mintAmount.sub(1))
+          IGainAAVEIRSUser.mintExactB(correctOut, amount.sub(1))
         ).eventually.be.rejectedWith(
           Error,
           getRevertError("SLIPPAGE_DETECTED")
@@ -583,7 +603,8 @@ describe("IGainAAVEIRS", function () {
             IGainAAVEIRS.poolB(),
             IGainAAVEIRS.totalSupply(),
           ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
 
         const [userLPBalance, contractBaseBalance] = await Promise.all([
@@ -591,26 +612,18 @@ describe("IGainAAVEIRS", function () {
           base.balanceOf(IGainAAVEIRS.address),
         ]);
 
-        const maxOut = BigNumber.from(
-          new BN(poolA.add(mintAmount).mul(poolB.add(mintAmount)).toString())
-            .sqrt()
-            .integerValue(BN.ROUND_FLOOR)
-            .toString(10)
-        )
-          .mul(BigNumber.from(10).pow(18))
-          .div(
-            BigNumber.from(
-              new BN(poolA.mul(poolB).toString())
-                .sqrt()
-                .integerValue(BN.ROUND_FLOOR)
-                .toString(10)
-            )
-          )
-          .sub(BigNumber.from(10).pow(18))
+        const k = sqrt(poolA.mul(poolB));
+        const k_ = sqrt(poolA.add(mintAmount).mul(poolB.add(mintAmount)));
+        const maxOut = k_
+          .mul(e18)
+          .div(k)
+          .sub(e18)
           .mul(totalSupply)
-          .div(BigNumber.from(10).pow(18))
+          .div(e18)
           .mul(fee)
-          .div(BigNumber.from(10).pow(18));
+          .div(e18);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
 
         await IGainAAVEIRSUser.mintLP(mintAmount, maxOut);
 
@@ -624,7 +637,13 @@ describe("IGainAAVEIRS", function () {
         expect(userLPBalance.add(maxOut)).equal(newUserLPBalance);
       });
 
-      it("Should not mintable for lp without sufficient balance");
+      it("Should not mintable for lp without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.mintLP("1", "0")
+        ).eventually.be.rejectedWith(
+          getRevertError("Dai/insufficient-balance")
+        );
+      });
 
       it("Should revert when cannot mint lp as desired", async function () {
         const [openTime, closeTime, minFee, maxFee, poolA, poolB, totalSupply] =
@@ -637,29 +656,22 @@ describe("IGainAAVEIRS", function () {
             IGainAAVEIRS.poolB(),
             IGainAAVEIRS.totalSupply(),
           ]);
-        const txTime = openTime.add(timeGap++);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
         const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
 
-        const maxOut = BigNumber.from(
-          new BN(poolA.add(mintAmount).mul(poolB.add(mintAmount)).toString())
-            .sqrt()
-            .integerValue(BN.ROUND_FLOOR)
-            .toString(10)
-        )
-          .mul(BigNumber.from(10).pow(18))
-          .div(
-            BigNumber.from(
-              new BN(poolA.mul(poolB).toString())
-                .sqrt()
-                .integerValue(BN.ROUND_FLOOR)
-                .toString(10)
-            )
-          )
-          .sub(BigNumber.from(10).pow(18))
+        const k = sqrt(poolA.mul(poolB));
+        const k_ = sqrt(poolA.add(mintAmount).mul(poolB.add(mintAmount)));
+        const maxOut = k_
+          .mul(e18)
+          .div(k)
+          .sub(e18)
           .mul(totalSupply)
-          .div(BigNumber.from(10).pow(18))
+          .div(e18)
           .mul(fee)
-          .div(BigNumber.from(10).pow(18));
+          .div(e18);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
 
         await expect(
           IGainAAVEIRSUser.mintLP(mintAmount, maxOut.add(1))
