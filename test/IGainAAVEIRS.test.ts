@@ -680,14 +680,216 @@ describe("IGainAAVEIRS", function () {
     });
 
     describe("Burn functionality", async function () {
-      it("Should burnable for a and b");
-      it("Should not burnable for a and b without sufficient balance");
-      it("Should burnable for a");
-      it("Should not burnable for a without sufficient balance");
-      it("Should burnable for b");
-      it("Should not burnable for b without sufficient balance");
-      it("Should burnable for lp");
-      it("Should not burnable for lp without sufficient balance");
+      const burnAmount = amount.div(9);
+
+      it("Should burnable for a and b", async function () {
+        const [
+          userABalance,
+          userBBalance,
+          contractBaseBalance,
+          userBaseBalance,
+        ] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          base.balanceOf(IGainAAVEIRS.address),
+          base.balanceOf(user.address),
+        ]);
+        await IGainAAVEIRSUser.burn(burnAmount);
+
+        const [
+          newUserABalance,
+          newUserBBalance,
+          newContractBaseBalance,
+          newUserBaseBalance,
+        ] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          base.balanceOf(IGainAAVEIRS.address),
+          base.balanceOf(user.address),
+        ]);
+        expect(contractBaseBalance.sub(burnAmount)).equal(
+          newContractBaseBalance
+        );
+        expect(userABalance.sub(burnAmount)).equal(newUserABalance);
+        expect(userBBalance.sub(burnAmount)).equal(newUserBBalance);
+        expect(
+          userBaseBalance.add(
+            burnAmount.sub(burnAmount.mul(BigNumber.from(10).pow(16)).div(e18))
+          )
+        ).equal(newUserBaseBalance);
+      });
+
+      it("Should not burnable for a and b without sufficient balance", async function () {
+        await expect(IGainAAVEIRSUser2.burn("1")).eventually.be.rejectedWith(
+          getRevertError("ERC20: burn amount exceeds balance")
+        );
+      });
+
+      it("Should burnable for a", async function () {
+        const [userABalance, userBBalance, contractBaseBalance] =
+          await Promise.all([
+            aContract.balanceOf(user.address),
+            bContract.balanceOf(user.address),
+            base.balanceOf(IGainAAVEIRS.address),
+          ]);
+
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+        const correctBurn = userABalance.div(10);
+        const r = correctBurn.mul(4).mul(poolA).mul(fee).div(e18);
+        const x = poolB.sub(correctBurn).mul(fee).div(e18).add(poolA);
+        const amount = correctBurn.sub(
+          sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee)
+        );
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+
+        // await IGainAAVEIRSUser.mintA(amount, maxOut);
+        await IGainAAVEIRSUser.burnA(correctBurn, amount);
+
+        const [newUserABalance, newUserBBalance, newContractBaseBalance] =
+          await Promise.all([
+            aContract.balanceOf(user.address),
+            bContract.balanceOf(user.address),
+            base.balanceOf(IGainAAVEIRS.address),
+          ]);
+        expect(contractBaseBalance.sub(amount)).equal(newContractBaseBalance);
+        expect(userABalance.sub(correctBurn)).equal(newUserABalance);
+        expect(userBBalance).equal(newUserBBalance);
+      });
+
+      it("Should not burnable for a without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.burnA("1", "0")
+        ).eventually.be.rejectedWith(
+          getRevertError("ERC20: burn amount exceeds balance")
+        );
+      });
+
+      it("Should burnable for b", async function () {
+        const [userABalance, userBBalance, contractBaseBalance] =
+          await Promise.all([
+            aContract.balanceOf(user.address),
+            bContract.balanceOf(user.address),
+            base.balanceOf(IGainAAVEIRS.address),
+          ]);
+
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+        const correctBurn = userBBalance.div(10);
+        const r = correctBurn.mul(4).mul(poolB).mul(fee).div(e18);
+        const x = poolA.sub(correctBurn).mul(fee).div(e18).add(poolB);
+        const amount = correctBurn.sub(
+          sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee)
+        );
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+
+        // await IGainAAVEIRSUser.mintA(amount, maxOut);
+        await IGainAAVEIRSUser.burnB(correctBurn, amount);
+
+        const [newUserABalance, newUserBBalance, newContractBaseBalance] =
+          await Promise.all([
+            aContract.balanceOf(user.address),
+            bContract.balanceOf(user.address),
+            base.balanceOf(IGainAAVEIRS.address),
+          ]);
+        expect(contractBaseBalance.sub(amount)).equal(newContractBaseBalance);
+        expect(userABalance).equal(newUserABalance);
+        expect(userBBalance.sub(correctBurn)).equal(newUserBBalance);
+      });
+
+      it("Should not burnable for b without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.burnB("1", "0")
+        ).eventually.be.rejectedWith(
+          getRevertError("ERC20: burn amount exceeds balance")
+        );
+      });
+
+      it("Should burnable for lp", async function () {
+        const [openTime, closeTime, minFee, maxFee, poolA, poolB, totalSupply] =
+          await Promise.all([
+            IGainAAVEIRS.openTime(),
+            IGainAAVEIRS.closeTime(),
+            IGainAAVEIRS.minFee(),
+            IGainAAVEIRS.maxFee(),
+            IGainAAVEIRS.poolA(),
+            IGainAAVEIRS.poolB(),
+            IGainAAVEIRS.totalSupply(),
+          ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+
+        const [userLPBalance, contractBaseBalance] = await Promise.all([
+          IGainAAVEIRS.balanceOf(user.address),
+          base.balanceOf(IGainAAVEIRS.address),
+        ]);
+
+        const lp = userLPBalance.div(10);
+        const f = fee.mul(lp).div(totalSupply);
+        const amount = poolA
+          .add(poolB)
+          .sub(
+            sqrt(
+              poolA
+                .add(poolB)
+                .pow(2)
+                .sub(
+                  poolA
+                    .mul(poolB)
+                    .mul(4)
+                    .mul(f)
+                    .div(e18)
+                    .mul(e18.mul(2).sub(f))
+                    .div(e18)
+                )
+            )
+          )
+          .div(2);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+
+        await IGainAAVEIRSUser.burnLP(lp, amount);
+
+        const [newUserLPBalance, newContractBaseBalance] = await Promise.all([
+          IGainAAVEIRS.balanceOf(user.address),
+          base.balanceOf(IGainAAVEIRS.address),
+        ]);
+        expect(contractBaseBalance.sub(amount)).equal(newContractBaseBalance);
+        expect(userLPBalance.sub(lp)).equal(newUserLPBalance);
+      });
+
+      it("Should not burnable for lp without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.burnLP("1", "0")
+        ).eventually.be.rejectedWith(
+          getRevertError("ERC20: burn amount exceeds balance")
+        );
+      });
     });
 
     describe("Swap functionality", async function () {
