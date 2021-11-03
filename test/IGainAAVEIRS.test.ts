@@ -688,11 +688,13 @@ describe("IGainAAVEIRS", function () {
           userBBalance,
           contractBaseBalance,
           userBaseBalance,
+          protocolFee,
         ] = await Promise.all([
           aContract.balanceOf(user.address),
           bContract.balanceOf(user.address),
           base.balanceOf(IGainAAVEIRS.address),
           base.balanceOf(user.address),
+          IGainAAVEIRS.protocolFee(),
         ]);
         await IGainAAVEIRSUser.burn(burnAmount);
 
@@ -714,7 +716,7 @@ describe("IGainAAVEIRS", function () {
         expect(userBBalance.sub(burnAmount)).equal(newUserBBalance);
         expect(
           userBaseBalance.add(
-            burnAmount.sub(burnAmount.mul(BigNumber.from(10).pow(16)).div(e18))
+            burnAmount.sub(burnAmount.mul(protocolFee).div(e18))
           )
         ).equal(newUserBaseBalance);
       });
@@ -985,20 +987,141 @@ describe("IGainAAVEIRS", function () {
     });
 
     describe("LP functionality", async function () {
-      it("Should depositable");
-      it("Should not depositable without sufficient balance");
-      it("Should withdrawable");
-      it("Should not withdrawable without sufficient balance");
+      it("Should depositable", async function () {
+        const [userABalance, userBBalance, userLPBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          IGainAAVEIRSUser.balanceOf(user.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee, poolA, poolB, totalSupply] =
+          await Promise.all([
+            IGainAAVEIRS.openTime(),
+            IGainAAVEIRS.closeTime(),
+            IGainAAVEIRS.minFee(),
+            IGainAAVEIRS.maxFee(),
+            IGainAAVEIRS.poolA(),
+            IGainAAVEIRS.poolB(),
+            IGainAAVEIRS.totalSupply(),
+          ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+
+        const aIn = userABalance.div(10);
+        const bIn = userBBalance.div(10);
+
+        const k = sqrt(poolA.mul(poolB));
+        const k_ = sqrt(poolA.add(aIn).mul(poolB.add(bIn)));
+        const lp = k_
+          .mul(e18)
+          .div(k)
+          .sub(e18)
+          .mul(totalSupply)
+          .div(e18)
+          .mul(fee)
+          .div(e18);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+        await IGainAAVEIRSUser.depositLP(aIn, bIn, lp);
+
+        const [newUserABalance, newUserBBalance, newUserLPBalance] =
+          await Promise.all([
+            aContract.balanceOf(user.address),
+            bContract.balanceOf(user.address),
+            IGainAAVEIRSUser.balanceOf(user.address),
+          ]);
+        expect(userABalance.sub(aIn)).equal(newUserABalance);
+        expect(userBBalance.sub(bIn)).equal(newUserBBalance);
+        expect(userLPBalance.add(lp)).equal(newUserLPBalance);
+      });
+
+      it("Should not depositable without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.depositLP("1", "1", "0")
+        ).eventually.be.rejectedWith(
+          getRevertError("ERC20: burn amount exceeds balance")
+        );
+      });
+
+      it("Should withdrawable", async function () {
+        const [userABalance, userBBalance, userLPBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          IGainAAVEIRSUser.balanceOf(user.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee, poolA, poolB, totalSupply] =
+          await Promise.all([
+            IGainAAVEIRS.openTime(),
+            IGainAAVEIRS.closeTime(),
+            IGainAAVEIRS.minFee(),
+            IGainAAVEIRS.maxFee(),
+            IGainAAVEIRS.poolA(),
+            IGainAAVEIRS.poolB(),
+            IGainAAVEIRS.totalSupply(),
+          ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+
+        const aIn = userABalance.div(10);
+        const bIn = userBBalance.div(10);
+
+        const k = sqrt(poolA.mul(poolB));
+        const k_ = sqrt(poolA.sub(aIn).mul(poolB.sub(bIn)));
+        const lp = e18
+          .sub(k_.mul(e18).div(k))
+          .mul(totalSupply)
+          .div(e18)
+          .mul(e18)
+          .div(fee);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+        await IGainAAVEIRSUser.withdrawLP(aIn, bIn, lp);
+
+        const [newUserABalance, newUserBBalance, newUserLPBalance] =
+          await Promise.all([
+            aContract.balanceOf(user.address),
+            bContract.balanceOf(user.address),
+            IGainAAVEIRSUser.balanceOf(user.address),
+          ]);
+        expect(userABalance.add(aIn)).equal(newUserABalance);
+        expect(userBBalance.add(bIn)).equal(newUserBBalance);
+        expect(userLPBalance.sub(lp)).equal(newUserLPBalance);
+      });
+      it("Should not withdrawable without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.depositLP("1", "1", "0")
+        ).eventually.be.rejectedWith(
+          getRevertError("ERC20: burn amount exceeds balance")
+        );
+      });
     });
 
-    it("Should not claimable");
+    it("Should not claimable", async function () {
+      await expect(IGainAAVEIRSUser.claim()).eventually.be.rejectedWith(
+        getRevertError("Not yet")
+      );
+    });
   });
 
   describe("After close time", async function () {
-    it("Should closable after duration", async function () {
+    before(async function () {
       await network.provider.send("evm_increaseTime", [86400]);
       await network.provider.send("evm_mine");
+    });
 
+    it("Fee should be max", async function () {
+      const [fee, maxFee] = await Promise.all([
+        IGainAAVEIRS.fee(),
+        IGainAAVEIRS.maxFee(),
+      ]);
+
+      expect(e18.sub(fee)).equal(maxFee);
+    });
+
+    it("Should closable after duration", async function () {
       await expect(IGainAAVEIRS.close()).eventually.be.fulfilled;
     });
 
@@ -1006,6 +1129,42 @@ describe("IGainAAVEIRS", function () {
       await expect(IGainAAVEIRS.close()).eventually.be.rejected;
     });
 
-    it("Should claimable");
+    it("Should claimable", async function () {
+      const [
+        userABalance,
+        userBBalance,
+        userLPBalance,
+        poolA,
+        poolB,
+        totalSupply,
+        bPrice,
+        userBaseBalance,
+        protocolFee,
+      ] = await Promise.all([
+        aContract.balanceOf(user.address),
+        bContract.balanceOf(user.address),
+        IGainAAVEIRSUser.balanceOf(user.address),
+        IGainAAVEIRSUser.poolA(),
+        IGainAAVEIRSUser.poolB(),
+        IGainAAVEIRSUser.totalSupply(),
+        IGainAAVEIRSUser.bPrice(),
+        base.balanceOf(user.address),
+        IGainAAVEIRSUser.protocolFee(),
+      ]);
+
+      const da = poolA.mul(userLPBalance).div(totalSupply);
+      const db = poolB.mul(userLPBalance).div(totalSupply);
+      const amount = userABalance
+        .add(da)
+        .mul(e18.sub(bPrice))
+        .add(userBBalance.add(db).mul(bPrice))
+        .div(e18);
+      const fee = amount.mul(protocolFee).div(e18);
+
+      await IGainAAVEIRSUser.claim();
+
+      const newUserBaseBalance = await base.balanceOf(user.address);
+      expect(userBaseBalance.add(amount.sub(fee))).equal(newUserBaseBalance);
+    });
   });
 });
