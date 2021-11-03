@@ -117,6 +117,10 @@ describe("IGainAAVEIRS", function () {
     });
 
     it("Should not burnable", async function () {
+      await expect(IGainAAVEIRS.burn(amount)).eventually.be.rejectedWith(
+        Error,
+        getRevertError("cannot buy")
+      );
       await expect(IGainAAVEIRS.burnA(amount, "0")).eventually.be.rejectedWith(
         Error,
         getRevertError("cannot buy")
@@ -771,6 +775,41 @@ describe("IGainAAVEIRS", function () {
         expect(userBBalance).equal(newUserBBalance);
       });
 
+      it("Should revert when cannot get a more than desired from burning a", async function () {
+        const [userABalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          base.balanceOf(IGainAAVEIRS.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+        const correctBurn = userABalance.div(10);
+        const r = correctBurn.mul(4).mul(poolA).mul(fee).div(e18);
+        const x = poolB.sub(correctBurn).mul(fee).div(e18).add(poolA);
+        const amount = correctBurn.sub(
+          sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee)
+        );
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+
+        // await IGainAAVEIRSUser.mintA(amount, maxOut);
+        await expect(
+          IGainAAVEIRSUser.burnA(correctBurn, amount.add(1))
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
+      });
+
       it("Should not burnable for a without sufficient balance", async function () {
         await expect(
           IGainAAVEIRSUser2.burnA("1", "0")
@@ -821,6 +860,40 @@ describe("IGainAAVEIRS", function () {
         expect(contractBaseBalance.sub(amount)).equal(newContractBaseBalance);
         expect(userABalance).equal(newUserABalance);
         expect(userBBalance.sub(correctBurn)).equal(newUserBBalance);
+      });
+
+      it("Should revert when cannot get a more than desired from burning b", async function () {
+        const [userBBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          base.balanceOf(IGainAAVEIRS.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+        const correctBurn = userBBalance.div(10);
+        const r = correctBurn.mul(4).mul(poolB).mul(fee).div(e18);
+        const x = poolA.sub(correctBurn).mul(fee).div(e18).add(poolB);
+        const amount = correctBurn.sub(
+          sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee)
+        );
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+
+        await expect(
+          IGainAAVEIRSUser.burnB(correctBurn, amount.add(1))
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
       });
 
       it("Should not burnable for b without sufficient balance", async function () {
@@ -885,6 +958,59 @@ describe("IGainAAVEIRS", function () {
         expect(userLPBalance.sub(lp)).equal(newUserLPBalance);
       });
 
+      it("Should revert when cannot get a more than desired from burning lp", async function () {
+        const [
+          userLPBalance,
+          openTime,
+          closeTime,
+          minFee,
+          maxFee,
+          poolA,
+          poolB,
+          totalSupply,
+        ] = await Promise.all([
+          IGainAAVEIRS.balanceOf(user.address),
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+          IGainAAVEIRS.totalSupply(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+
+        const lp = userLPBalance.div(10);
+        const f = fee.mul(lp).div(totalSupply);
+        const amount = poolA
+          .add(poolB)
+          .sub(
+            sqrt(
+              poolA
+                .add(poolB)
+                .pow(2)
+                .sub(
+                  poolA
+                    .mul(poolB)
+                    .mul(4)
+                    .mul(f)
+                    .div(e18)
+                    .mul(e18.mul(2).sub(f))
+                    .div(e18)
+                )
+            )
+          )
+          .div(2);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+
+        await expect(
+          IGainAAVEIRSUser.burnLP(lp, amount.add(1))
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
+      });
+
       it("Should not burnable for lp without sufficient balance", async function () {
         await expect(
           IGainAAVEIRSUser2.burnLP("1", "0")
@@ -932,6 +1058,37 @@ describe("IGainAAVEIRS", function () {
         expect(userBBalance.add(expectedB)).equal(newUserBBalance);
       });
 
+      it("Should revert when cannot swap more b than desired", async function () {
+        const [userABalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+
+        const a = userABalance.div(10);
+        const expectedB = a
+          .mul(fee)
+          .mul(poolB)
+          .div(poolA.mul(e18).add(a.mul(fee)));
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+        await expect(
+          IGainAAVEIRSUser.swapAtoB(a, expectedB.add(1))
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
+      });
+
       it("Should not swapable from a to b without sufficient balance", async function () {
         await expect(
           IGainAAVEIRSUser2.swapAtoB("1", 0)
@@ -975,6 +1132,37 @@ describe("IGainAAVEIRS", function () {
         ]);
         expect(userABalance.add(expectedA)).equal(newUserABalance);
         expect(userBBalance.sub(b)).equal(newUserBBalance);
+      });
+
+      it("Should revert when cannot swap more a than desired", async function () {
+        const [userBBalance] = await Promise.all([
+          bContract.balanceOf(user.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+
+        const b = userBBalance.div(10);
+        const expectedA = b
+          .mul(fee)
+          .mul(poolA)
+          .div(poolB.mul(e18).add(b.mul(fee)));
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+        await expect(
+          IGainAAVEIRSUser.swapBtoA(b, expectedA.add(1))
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
       });
 
       it("Should not swapable from b to a without sufficient balance", async function () {
@@ -1036,6 +1224,46 @@ describe("IGainAAVEIRS", function () {
         expect(userLPBalance.add(lp)).equal(newUserLPBalance);
       });
 
+      it("Shoud revert when cannot get more lp than desired from deposit", async function () {
+        const [userABalance, userBBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee, poolA, poolB, totalSupply] =
+          await Promise.all([
+            IGainAAVEIRS.openTime(),
+            IGainAAVEIRS.closeTime(),
+            IGainAAVEIRS.minFee(),
+            IGainAAVEIRS.maxFee(),
+            IGainAAVEIRS.poolA(),
+            IGainAAVEIRS.poolB(),
+            IGainAAVEIRS.totalSupply(),
+          ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+
+        const aIn = userABalance.div(10);
+        const bIn = userBBalance.div(10);
+
+        const k = sqrt(poolA.mul(poolB));
+        const k_ = sqrt(poolA.add(aIn).mul(poolB.add(bIn)));
+        const lp = k_
+          .mul(e18)
+          .div(k)
+          .sub(e18)
+          .mul(totalSupply)
+          .div(e18)
+          .mul(fee)
+          .div(e18);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+        await expect(
+          IGainAAVEIRSUser.depositLP(aIn, bIn, lp.add(1))
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
+      });
+
       it("Should not depositable without sufficient balance", async function () {
         await expect(
           IGainAAVEIRSUser2.depositLP("1", "1", "0")
@@ -1090,6 +1318,46 @@ describe("IGainAAVEIRS", function () {
         expect(userBBalance.add(bIn)).equal(newUserBBalance);
         expect(userLPBalance.sub(lp)).equal(newUserLPBalance);
       });
+
+      it("Shoud revert when cannot get more base token than desired from withdraw", async function () {
+        const [userABalance, userBBalance, userLPBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+          IGainAAVEIRSUser.balanceOf(user.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee, poolA, poolB, totalSupply] =
+          await Promise.all([
+            IGainAAVEIRS.openTime(),
+            IGainAAVEIRS.closeTime(),
+            IGainAAVEIRS.minFee(),
+            IGainAAVEIRS.maxFee(),
+            IGainAAVEIRS.poolA(),
+            IGainAAVEIRS.poolB(),
+            IGainAAVEIRS.totalSupply(),
+          ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+
+        const aIn = userABalance.div(10);
+        const bIn = userBBalance.div(10);
+
+        const k = sqrt(poolA.mul(poolB));
+        const k_ = sqrt(poolA.sub(aIn).mul(poolB.sub(bIn)));
+        const lp = e18
+          .sub(k_.mul(e18).div(k))
+          .mul(totalSupply)
+          .div(e18)
+          .mul(e18)
+          .div(fee);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+        await expect(
+          IGainAAVEIRSUser.withdrawLP(aIn, bIn, lp.sub(1))
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
+      });
+
       it("Should not withdrawable without sufficient balance", async function () {
         await expect(
           IGainAAVEIRSUser2.depositLP("1", "1", "0")
