@@ -893,10 +893,95 @@ describe("IGainAAVEIRS", function () {
     });
 
     describe("Swap functionality", async function () {
-      it("Should swapable from a to b");
-      it("Should not swapable from a to b without sufficient balance");
-      it("Should swapable from b to a");
-      it("Should not swapable from b to a without sufficient balance");
+      it("Should swapable from a to b", async function () {
+        const [userABalance, userBBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+
+        const a = userABalance.div(10);
+        const expectedB = a
+          .mul(fee)
+          .mul(poolB)
+          .div(poolA.mul(e18).add(a.mul(fee)));
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+        await IGainAAVEIRSUser.swapAtoB(a, expectedB);
+
+        const [newUserABalance, newUserBBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+        ]);
+        expect(userABalance.sub(a)).equal(newUserABalance);
+        expect(userBBalance.add(expectedB)).equal(newUserBBalance);
+      });
+
+      it("Should not swapable from a to b without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.swapAtoB("1", 0)
+        ).eventually.be.rejectedWith(
+          getRevertError("ERC20: burn amount exceeds balance")
+        );
+      });
+
+      it("Should swapable from b to a", async function () {
+        const [userABalance, userBBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+        ]);
+
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+
+        const b = userBBalance.div(10);
+        const expectedA = b
+          .mul(fee)
+          .mul(poolA)
+          .div(poolB.mul(e18).add(b.mul(fee)));
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+        await IGainAAVEIRSUser.swapBtoA(b, expectedA);
+
+        const [newUserABalance, newUserBBalance] = await Promise.all([
+          aContract.balanceOf(user.address),
+          bContract.balanceOf(user.address),
+        ]);
+        expect(userABalance.add(expectedA)).equal(newUserABalance);
+        expect(userBBalance.sub(b)).equal(newUserBBalance);
+      });
+
+      it("Should not swapable from b to a without sufficient balance", async function () {
+        await expect(
+          IGainAAVEIRSUser2.swapAtoB("1", 0)
+        ).eventually.be.rejectedWith(
+          getRevertError("ERC20: burn amount exceeds balance")
+        );
+      });
     });
 
     describe("LP functionality", async function () {
