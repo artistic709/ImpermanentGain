@@ -225,7 +225,7 @@ describe("IGainAAVEIRS", function () {
           a,
           b
         )
-      ).eventually.be.rejected;
+      ).eventually.be.rejectedWith("Initialized");
     });
   });
 
