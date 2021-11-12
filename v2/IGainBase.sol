@@ -704,7 +704,7 @@ abstract contract IGainBase is ERC20, Timestamp {
     }
 
     // 1 - swap fee (numerator, in 1e18 format)
-    function fee() public view returns (uint256) {
+    function fee() public virtual view returns (uint256) {
         uint256 time = _blockTimestamp();
         uint256 _fee;
         if(time < closeTime) {
