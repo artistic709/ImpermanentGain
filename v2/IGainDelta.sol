@@ -23,6 +23,11 @@ contract IGainDelta is IGainBase {
         openPrice = uint256(oracle.latestAnswer());
     }
 
+    // 1 - swap fee (numerator, in 1e18 format)
+    function fee() public override pure returns (uint256) {
+        return 1e18 - minFee;
+    }
+
     // can only call once after closeTime
     // get price from oracle and calculate IL
     function close() external override {

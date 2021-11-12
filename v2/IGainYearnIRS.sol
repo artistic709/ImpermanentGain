@@ -23,6 +23,21 @@ contract IGainYearnIRS is IGainBase {
         initialRate = vault.pricePerShare();
     }
 
+    // 1 - swap fee (numerator, in 1e18 format)
+    function fee() public override view returns (uint256) {
+        uint256 time = _blockTimestamp();
+        uint256 _fee;
+        if(time < closeTime) {
+            _fee = maxFee - (
+                (time - openTime) * (maxFee - minFee) / (closeTime - openTime)
+            );
+        }
+        else {
+            _fee = minFee;
+        }
+        return 1e18 - _fee;
+    }
+
     function close() external override {
         require(block.timestamp >= closeTime, "Not yet");
         require(canBuy, "Closed");
