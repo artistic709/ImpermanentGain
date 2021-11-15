@@ -39,6 +39,7 @@
     "typescript": "^4.4.4"
   },
   "scripts": {
-    "serve": "remixd -s $INIT_CWD --remix-ide https://remix.ethereum.org"
+    "build-config": "tsc hardhat.config.ts --esModuleInterop",
+    "serve": "npm run build-config && remixd -s $INIT_CWD --remix-ide https://remix.ethereum.org"
   }
 }
