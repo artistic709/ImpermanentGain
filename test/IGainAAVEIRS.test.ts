@@ -25,17 +25,27 @@ function getFee(
   minFee: BigNumber,
   maxFee: BigNumber
 ): BigNumber {
-  if (closeTime.lte(openTime)) return e18.sub(maxFee);
-  return BigNumber.from("10")
-    .pow(18)
-    .sub(
-      minFee.add(
-        maxFee
-          .sub(minFee)
-          .mul(txTime.sub(openTime))
-          .div(closeTime.sub(openTime))
-      )
-    );
+  if (closeTime.lte(openTime)) return e18.sub(minFee);
+  return e18.sub(
+    maxFee.sub(
+      maxFee.sub(minFee).mul(txTime.sub(openTime)).div(closeTime.sub(openTime))
+    )
+  );
+}
+
+function getFee2(
+  openTime: BigNumber,
+  closeTime: BigNumber,
+  txTime: BigNumber,
+  minFee: BigNumber,
+  maxFee: BigNumber
+): BigNumber {
+  if (closeTime.lte(openTime)) return e18.sub(minFee);
+  return e18.sub(
+    minFee.add(
+      maxFee.sub(minFee).mul(txTime.sub(openTime)).div(closeTime.sub(openTime))
+    )
+  );
 }
 
 describe("IGainAAVEIRS", function () {
@@ -93,44 +103,36 @@ describe("IGainAAVEIRS", function () {
   describe("Before Init", async function () {
     it("Should not mintable", async function () {
       await expect(IGainAAVEIRS.mint(amount)).eventually.be.rejectedWith(
-        Error,
         getRevertError("cannot buy")
       );
       await expect(IGainAAVEIRS.mintLP(amount, "0")).eventually.be.rejectedWith(
-        Error,
         getRevertError("cannot buy")
       );
       await expect(IGainAAVEIRS.mintA(amount, "0")).eventually.be.rejectedWith(
-        Error,
         getRevertError("cannot buy")
       );
       await expect(
         IGainAAVEIRS.mintExactA(amount, "0")
-      ).eventually.be.rejectedWith(Error, getRevertError("cannot buy"));
+      ).eventually.be.rejectedWith(getRevertError("cannot buy"));
       await expect(IGainAAVEIRS.mintB(amount, "0")).eventually.be.rejectedWith(
-        Error,
         getRevertError("cannot buy")
       );
       await expect(
         IGainAAVEIRS.mintExactB(amount, "0")
-      ).eventually.be.rejectedWith(Error, getRevertError("cannot buy"));
+      ).eventually.be.rejectedWith(getRevertError("cannot buy"));
     });
 
     it("Should not burnable", async function () {
       await expect(IGainAAVEIRS.burn(amount)).eventually.be.rejectedWith(
-        Error,
         getRevertError("cannot buy")
       );
       await expect(IGainAAVEIRS.burnA(amount, "0")).eventually.be.rejectedWith(
-        Error,
         getRevertError("cannot buy")
       );
       await expect(IGainAAVEIRS.burnB(amount, "0")).eventually.be.rejectedWith(
-        Error,
         getRevertError("cannot buy")
       );
       await expect(IGainAAVEIRS.burnLP(amount, "0")).eventually.be.rejectedWith(
-        Error,
         getRevertError("cannot buy")
       );
     });
@@ -138,19 +140,19 @@ describe("IGainAAVEIRS", function () {
     it("Should not swapable", async function () {
       await expect(
         IGainAAVEIRS.swapAtoB(amount, "0")
-      ).eventually.be.rejectedWith(Error, getRevertError("cannot buy"));
+      ).eventually.be.rejectedWith(getRevertError("cannot buy"));
       await expect(
         IGainAAVEIRS.swapBtoA(amount, "0")
-      ).eventually.be.rejectedWith(Error, getRevertError("cannot buy"));
+      ).eventually.be.rejectedWith(getRevertError("cannot buy"));
     });
 
     it("Should not depositable or withdrawable", async function () {
       await expect(
         IGainAAVEIRS.depositLP("0", "0", "0")
-      ).eventually.be.rejectedWith(Error, getRevertError("cannot buy"));
+      ).eventually.be.rejectedWith(getRevertError("cannot buy"));
       await expect(
         IGainAAVEIRS.withdrawLP("0", "0", "0")
-      ).eventually.be.rejectedWith(Error, getRevertError("cannot buy"));
+      ).eventually.be.rejectedWith(getRevertError("cannot buy"));
     });
 
     it("Should not claimable", async function () {
@@ -352,10 +354,7 @@ describe("IGainAAVEIRS", function () {
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
         await expect(
           IGainAAVEIRSUser.mintA(mintAmount, maxOut.add(1))
-        ).eventually.be.rejectedWith(
-          Error,
-          getRevertError("SLIPPAGE_DETECTED")
-        );
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
       });
 
       it("Should exact-mintable for a", async function () {
@@ -400,7 +399,7 @@ describe("IGainAAVEIRS", function () {
         expect(userBBalance).equal(newUserBBalance);
       });
 
-      it("Should revert when cannot mint a as desired", async function () {
+      it("Should revert when cannot mint a as desired amount", async function () {
         const [openTime, closeTime, minFee, maxFee] = await Promise.all([
           IGainAAVEIRS.openTime(),
           IGainAAVEIRS.closeTime(),
@@ -417,23 +416,38 @@ describe("IGainAAVEIRS", function () {
         const correctOut = poolA.div(2);
         const r = correctOut.mul(4).mul(poolB).mul(fee).div(e18);
         const x = poolA.sub(correctOut).mul(fee).div(e18).add(poolB);
-        const amount = sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee);
+        const amount = sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(fee).div(2);
 
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
-
         // await IGainAAVEIRSUser.mintA(amount, maxOut);
         await expect(
           IGainAAVEIRSUser.mintExactA(correctOut.add(1), amount)
-        ).eventually.be.rejectedWith(
-          Error,
-          getRevertError("SLIPPAGE_DETECTED")
-        );
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
+      });
+
+      it("Should revert when cannot mint a as desired cost", async function () {
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+        const correctOut = poolA.div(2);
+        const r = correctOut.mul(4).mul(poolB).mul(fee).div(e18);
+        const x = poolA.sub(correctOut).mul(fee).div(e18).add(poolB);
+        const amount = sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(fee).div(2);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
         await expect(
           IGainAAVEIRSUser.mintExactA(correctOut, amount.sub(1))
-        ).eventually.be.rejectedWith(
-          Error,
-          getRevertError("SLIPPAGE_DETECTED")
-        );
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
       });
 
       it("Should mintable for b", async function () {
@@ -512,10 +526,7 @@ describe("IGainAAVEIRS", function () {
         network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
         await expect(
           IGainAAVEIRSUser.mintB(mintAmount, maxOut.add(1))
-        ).eventually.be.rejectedWith(
-          Error,
-          getRevertError("SLIPPAGE_DETECTED")
-        );
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
       });
 
       it("Should exact-mintable for b", async function () {
@@ -560,7 +571,7 @@ describe("IGainAAVEIRS", function () {
         expect(userBBalance.add(correctOut)).equal(newUserBBalance);
       });
 
-      it("Should revert when cannot mint b as desired", async function () {
+      it("Should revert when cannot mint b as desired amount", async function () {
         const [openTime, closeTime, minFee, maxFee] = await Promise.all([
           IGainAAVEIRS.openTime(),
           IGainAAVEIRS.closeTime(),
@@ -584,16 +595,33 @@ describe("IGainAAVEIRS", function () {
         // await IGainAAVEIRSUser.mintA(amount, maxOut);
         await expect(
           IGainAAVEIRSUser.mintExactB(correctOut.add(1), amount)
-        ).eventually.be.rejectedWith(
-          Error,
-          getRevertError("SLIPPAGE_DETECTED")
-        );
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
+      });
+
+      it("Should revert when cannot mint b as desired cost", async function () {
+        const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+          IGainAAVEIRS.openTime(),
+          IGainAAVEIRS.closeTime(),
+          IGainAAVEIRS.minFee(),
+          IGainAAVEIRS.maxFee(),
+        ]);
+        timeGap += 10;
+        const txTime = openTime.add(timeGap);
+        const fee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+        const [poolA, poolB] = await Promise.all([
+          IGainAAVEIRS.poolA(),
+          IGainAAVEIRS.poolB(),
+        ]);
+        const correctOut = poolB.div(2);
+        const r = correctOut.mul(4).mul(poolA).mul(fee).div(e18);
+        const x = poolB.sub(correctOut).mul(fee).div(e18).add(poolA);
+        const amount = sqrt(x.pow(2).add(r)).sub(x).mul(e18).div(2).div(fee);
+
+        network.provider.send("evm_setNextBlockTimestamp", [txTime.toNumber()]);
+
         await expect(
           IGainAAVEIRSUser.mintExactB(correctOut, amount.sub(1))
-        ).eventually.be.rejectedWith(
-          Error,
-          getRevertError("SLIPPAGE_DETECTED")
-        );
+        ).eventually.be.rejectedWith(getRevertError("SLIPPAGE_DETECTED"));
       });
 
       it("Should mintable for lp", async function () {
@@ -679,7 +707,7 @@ describe("IGainAAVEIRS", function () {
 
         await expect(
           IGainAAVEIRSUser.mintLP(mintAmount, maxOut.add(1))
-        ).eventually.rejectedWith(Error, "SLIPPAGE_DETECTED");
+        ).eventually.rejectedWith("SLIPPAGE_DETECTED");
       });
     });
 
@@ -1378,15 +1406,6 @@ describe("IGainAAVEIRS", function () {
     before(async function () {
       await network.provider.send("evm_increaseTime", [86400]);
       await network.provider.send("evm_mine");
-    });
-
-    it("Fee should be max", async function () {
-      const [fee, maxFee] = await Promise.all([
-        IGainAAVEIRS.fee(),
-        IGainAAVEIRS.maxFee(),
-      ]);
-
-      expect(e18.sub(fee)).equal(maxFee);
     });
 
     it("Should closable after duration", async function () {
