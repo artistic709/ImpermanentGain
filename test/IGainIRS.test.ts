@@ -18,6 +18,21 @@ function sqrt(value: BigNumber): BigNumber {
   );
 }
 
+function getFee(
+  openTime: BigNumber,
+  closeTime: BigNumber,
+  txTime: BigNumber,
+  minFee: BigNumber,
+  maxFee: BigNumber
+): BigNumber {
+  if (closeTime.lte(openTime)) return e18.sub(minFee);
+  return e18.sub(
+    maxFee.sub(
+      maxFee.sub(minFee).mul(txTime.sub(openTime)).div(closeTime.sub(openTime))
+    )
+  );
+}
+
 describe("IGainYearnIRS", function () {
   const amount = BigNumber.from(parseUnits("10000"));
   let IGainYearnIRS: IGainYearnIRS;
@@ -125,12 +140,26 @@ describe("IGainYearnIRS", function () {
   });
 
   describe("Before close time", async function () {
-    describe("Should not closable", async function () {
-      it("Should not closable", async function () {
-        await expect(IGainYearnIRS.close()).eventually.be.rejectedWith(
-          "Not yet"
-        );
-      });
+    it("Fee should correct", async function () {
+      const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+        IGainYearnIRS.openTime(),
+        IGainYearnIRS.closeTime(),
+        IGainYearnIRS.minFee(),
+        IGainYearnIRS.maxFee(),
+      ]);
+      const txTime = openTime.add(10);
+      const expectedFee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+
+      await network.provider.send("evm_setNextBlockTimestamp", [
+        txTime.toNumber(),
+      ]);
+      await network.provider.send("evm_mine");
+      const realFee = await IGainYearnIRS.fee();
+      expect(expectedFee).equal(realFee);
+    });
+
+    it("Should not closable", async function () {
+      await expect(IGainYearnIRS.close()).eventually.be.rejectedWith("Not yet");
     });
   });
 
@@ -138,6 +167,15 @@ describe("IGainYearnIRS", function () {
     before(async function () {
       await network.provider.send("evm_increaseTime", [86400]);
       await network.provider.send("evm_mine");
+    });
+
+    it("Fee should be min", async function () {
+      const [fee, minFee] = await Promise.all([
+        IGainYearnIRS.fee(),
+        IGainYearnIRS.minFee(),
+      ]);
+
+      expect(e18.sub(fee)).equal(minFee);
     });
 
     it("Should closable after duration", async function () {

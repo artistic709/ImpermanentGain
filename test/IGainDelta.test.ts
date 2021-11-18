@@ -136,6 +136,15 @@ describe("IGainDelta", function () {
       await network.provider.send("evm_mine");
     });
 
+    it("Fee should be min", async function () {
+      const [fee, minFee] = await Promise.all([
+        IGainDelta.fee(),
+        IGainDelta.minFee(),
+      ]);
+
+      expect(e18.sub(fee)).equal(minFee);
+    });
+
     it("Should closable after duration", async function () {
       await expect(IGainDelta.close()).eventually.be.fulfilled;
     });

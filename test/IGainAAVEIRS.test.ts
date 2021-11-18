@@ -33,21 +33,6 @@ function getFee(
   );
 }
 
-function getFee2(
-  openTime: BigNumber,
-  closeTime: BigNumber,
-  txTime: BigNumber,
-  minFee: BigNumber,
-  maxFee: BigNumber
-): BigNumber {
-  if (closeTime.lte(openTime)) return e18.sub(minFee);
-  return e18.sub(
-    minFee.add(
-      maxFee.sub(minFee).mul(txTime.sub(openTime)).div(closeTime.sub(openTime))
-    )
-  );
-}
-
 describe("IGainAAVEIRS", function () {
   const amount = BigNumber.from(parseUnits("10000"));
   let IGainAAVEIRS: IGainAAVEIRS;
@@ -1348,10 +1333,9 @@ describe("IGainAAVEIRS", function () {
       });
 
       it("Shoud revert when cannot get more base token than desired from withdraw", async function () {
-        const [userABalance, userBBalance, userLPBalance] = await Promise.all([
+        const [userABalance, userBBalance] = await Promise.all([
           aContract.balanceOf(user.address),
           bContract.balanceOf(user.address),
-          IGainAAVEIRSUser.balanceOf(user.address),
         ]);
 
         const [openTime, closeTime, minFee, maxFee, poolA, poolB, totalSupply] =
@@ -1406,6 +1390,15 @@ describe("IGainAAVEIRS", function () {
     before(async function () {
       await network.provider.send("evm_increaseTime", [86400]);
       await network.provider.send("evm_mine");
+    });
+
+    it("Fee should be min", async function () {
+      const [fee, minFee] = await Promise.all([
+        IGainAAVEIRS.fee(),
+        IGainAAVEIRS.minFee(),
+      ]);
+
+      expect(e18.sub(fee)).equal(minFee);
     });
 
     it("Should closable after duration", async function () {

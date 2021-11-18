@@ -18,6 +18,21 @@ function sqrt(value: BigNumber): BigNumber {
   );
 }
 
+function getFee(
+  openTime: BigNumber,
+  closeTime: BigNumber,
+  txTime: BigNumber,
+  minFee: BigNumber,
+  maxFee: BigNumber
+): BigNumber {
+  if (closeTime.lte(openTime)) return e18.sub(minFee);
+  return e18.sub(
+    minFee.add(
+      maxFee.sub(minFee).mul(txTime.sub(openTime)).div(closeTime.sub(openTime))
+    )
+  );
+}
+
 describe("IGainIL", function () {
   const amount = BigNumber.from(parseUnits("10000"));
   let IGainIL: IGainIL;
@@ -123,10 +138,26 @@ describe("IGainIL", function () {
   });
 
   describe("Before close time", async function () {
-    describe("Should not closable", async function () {
-      it("Should not closable", async function () {
-        await expect(IGainIL.close()).eventually.be.rejectedWith("Not yet");
-      });
+    it("Fee should correct", async function () {
+      const [openTime, closeTime, minFee, maxFee] = await Promise.all([
+        IGainIL.openTime(),
+        IGainIL.closeTime(),
+        IGainIL.minFee(),
+        IGainIL.maxFee(),
+      ]);
+      const txTime = openTime.add(10);
+      const expectedFee = getFee(openTime, closeTime, txTime, minFee, maxFee);
+
+      await network.provider.send("evm_setNextBlockTimestamp", [
+        txTime.toNumber(),
+      ]);
+      await network.provider.send("evm_mine");
+      const realFee = await IGainIL.fee();
+      expect(expectedFee).equal(realFee);
+    });
+
+    it("Should not closable", async function () {
+      await expect(IGainIL.close()).eventually.be.rejectedWith("Not yet");
     });
   });
 
@@ -134,6 +165,15 @@ describe("IGainIL", function () {
     before(async function () {
       await network.provider.send("evm_increaseTime", [86400]);
       await network.provider.send("evm_mine");
+    });
+
+    it("Fee should be max", async function () {
+      const [fee, maxFee] = await Promise.all([
+        IGainIL.fee(),
+        IGainIL.maxFee(),
+      ]);
+
+      expect(e18.sub(fee)).equal(maxFee);
     });
 
     it("Should closable after duration", async function () {
