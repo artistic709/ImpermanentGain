@@ -7,7 +7,7 @@ interface ILendingPool {
 }
 
 interface IIGainAAVEIRS {
-	function mintA(uint256 amount, uint256 min_a) external returns (uint256 _a);
+    function mintA(uint256 amount, uint256 min_a) external returns (uint256 _a);
     function a() external returns (address);
 }
 
@@ -21,24 +21,24 @@ interface IERC20 {
 }
 
 contract proxy {
-	ILendingPool public AAVE; // AAVE LendingPool
-	IIGainAAVEIRS public IGain;
-	IERC20 public A;
+    ILendingPool public AAVE; // AAVE LendingPool
+    IIGainAAVEIRS public IGain;
+    IERC20 public A;
     IERC20 public asset; // underlying asset's address
 
     constructor(address _asset, address _aave, address _igain) {
-    	asset = IERC20(_asset);
-    	AAVE = ILendingPool(_aave);
-    	IGain = IIGainAAVEIRS(_igain);
-    	A = IERC20(IGain.a());
-    	asset.approve(_aave, type(uint256).max);
-    	asset.approve(_igain, type(uint256).max);
+        asset = IERC20(_asset);
+        AAVE = ILendingPool(_aave);
+        IGain = IIGainAAVEIRS(_igain);
+        A = IERC20(IGain.a());
+        asset.approve(_aave, type(uint256).max);
+        asset.approve(_igain, type(uint256).max);
     }
 
     function deposit(uint256 depositAmount, uint256 igainAmount, uint256 minToken) external {
-    	asset.transferFrom(msg.sender, address(this), depositAmount + igainAmount);
-    	AAVE.deposit(address(asset), depositAmount, msg.sender, uint16(0));
-    	uint256 a = IGain.mintA(igainAmount, minToken);
-    	A.transfer(msg.sender, a);
+        asset.transferFrom(msg.sender, address(this), depositAmount + igainAmount);
+        AAVE.deposit(address(asset), depositAmount, msg.sender, uint16(0));
+        uint256 a = IGain.mintA(igainAmount, minToken);
+        A.transfer(msg.sender, a);
     }
 }
