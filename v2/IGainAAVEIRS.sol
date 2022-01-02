@@ -24,6 +24,7 @@ contract IGainAAVEIRS is IGainBase {
         asset = _asset;
         leverage = _leverage;
         initialRate = AAVE.getReserveNormalizedVariableDebt(asset);
+        require(initialRate > 0, "initialRate = 0");
     }
 
     // 1 - swap fee (numerator, in 1e18 format)

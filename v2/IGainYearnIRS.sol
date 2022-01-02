@@ -21,6 +21,7 @@ contract IGainYearnIRS is IGainBase {
         vault = IyVault(_vault);
         leverage = _leverage;
         initialRate = vault.pricePerShare();
+        require(initialRate > 0, "initialRate = 0");
     }
 
     // 1 - swap fee (numerator, in 1e18 format)
