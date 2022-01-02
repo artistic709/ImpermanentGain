@@ -31,7 +31,7 @@ contract IGainDelta is IGainBase {
     // can only call once after closeTime
     // get price from oracle and calculate IL
     function close() external override {
-        require(block.timestamp >= closeTime, "Not yet");
+        require(_blockTimestamp() >= closeTime, "Not yet");
         require(canBuy, "Closed");
         canBuy = false;
         closePrice = uint256(oracle.latestAnswer());

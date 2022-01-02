@@ -40,7 +40,7 @@ contract IGainYearnIRS is IGainBase {
     }
 
     function close() external override {
-        require(block.timestamp >= closeTime, "Not yet");
+        require(_blockTimestamp() >= closeTime, "Not yet");
         require(canBuy, "Closed");
         canBuy = false;
         endRate = vault.pricePerShare();
