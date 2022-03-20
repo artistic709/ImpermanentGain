@@ -2,9 +2,7 @@ pragma solidity 0.8.7;
 
 // SPDX-License-Identifier: MIT
 
-import "./IGainAAVEIRS.sol";
-
-contract iGainAAVEIRSFactory {
+contract iGainFactory {
     address immutable template;
 
     address internal owner;
@@ -18,6 +16,7 @@ contract iGainAAVEIRSFactory {
     }
 
     function newIGain() external returns (address igain) {
+        require(msg.sender == owner);
         igain = createClone(template);
         terms.push(igain);
         emit NewTermCreated(igain);
