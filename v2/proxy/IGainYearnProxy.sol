@@ -321,7 +321,7 @@ interface Pool {
     function stakeFor(address to, uint256 amount) external;
 }
 
-interface IyVault {
+interface IyVault is IERC20 {
     function pricePerShare() external view returns (uint256);
     function deposit(uint256 amount, address recipient) external returns (uint256);
     function withdraw(uint256 maxShare, address recipient) external returns (uint256);
@@ -357,27 +357,24 @@ contract iGainYearnProxy {
 
     function burnA(iGain igain, IyVault vault, uint256 _a, uint256 min_amount) external returns (uint256 amount) {
         IERC20(igain.a()).safeTransferFrom(msg.sender, address(this), _a);
-        uint256 yvAmount = igain.burnA(_a, 0);
-        uint256 fee = yvAmount / 1e16;
-        yvAmount -= fee;
+        igain.burnA(_a, 0);
+        uint256 yvAmount = vault.balanceOf(address(this));
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
     }
 
     function burnB(iGain igain, IyVault vault, uint256 _b, uint256 min_amount) external returns (uint256 amount) {
         IERC20(igain.b()).safeTransferFrom(msg.sender, address(this), _b);
-        uint256 yvAmount = igain.burnB(_b, 0);
-        uint256 fee = yvAmount / 1e16;
-        yvAmount -= fee;
+        igain.burnB(_b, 0);
+        uint256 yvAmount = vault.balanceOf(address(this));
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
     }
 
     function burnLP(iGain igain, IyVault vault, uint256 _lp, uint256 min_amount) external returns (uint256 amount) {
         IERC20(address(igain)).safeTransferFrom(msg.sender, address(this), _lp);
-        uint256 yvAmount = igain.burnLP(_lp, 0);
-        uint256 fee = yvAmount / 1e16;
-        yvAmount -= fee;
+        igain.burnLP(_lp, 0);
+        uint256 yvAmount = vault.balanceOf(address(this));
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
     }
