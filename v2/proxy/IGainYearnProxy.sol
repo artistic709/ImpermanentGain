@@ -357,24 +357,27 @@ contract iGainYearnProxy {
 
     function burnA(iGain igain, IyVault vault, uint256 _a, uint256 min_amount) external returns (uint256 amount) {
         IERC20(igain.a()).safeTransferFrom(msg.sender, address(this), _a);
-        igain.burnA(_a, 0);
-        uint256 yvAmount = vault.balanceOf(address(this));
+        uint256 yvAmount = igain.burnA(_a, 0);
+        uint256 fee = yvAmount * 0.01e18 / 1e18;
+        yvAmount -= fee;
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
     }
 
     function burnB(iGain igain, IyVault vault, uint256 _b, uint256 min_amount) external returns (uint256 amount) {
         IERC20(igain.b()).safeTransferFrom(msg.sender, address(this), _b);
-        igain.burnB(_b, 0);
-        uint256 yvAmount = vault.balanceOf(address(this));
+        uint256 yvAmount = igain.burnB(_b, 0);
+        uint256 fee = yvAmount * 0.01e18 / 1e18;
+        yvAmount -= fee;
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
     }
 
     function burnLP(iGain igain, IyVault vault, uint256 _lp, uint256 min_amount) external returns (uint256 amount) {
         IERC20(address(igain)).safeTransferFrom(msg.sender, address(this), _lp);
-        igain.burnLP(_lp, 0);
-        uint256 yvAmount = vault.balanceOf(address(this));
+        uint256 yvAmount = igain.burnLP(_lp, 0);
+        uint256 fee = yvAmount * 0.01e18 / 1e18;
+        yvAmount -= fee;
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
     }
