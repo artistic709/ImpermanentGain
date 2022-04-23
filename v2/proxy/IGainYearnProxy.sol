@@ -330,6 +330,12 @@ interface IyVault is IERC20 {
 contract iGainYearnProxy {
     using SafeERC20 for IERC20;
 
+    event Approval(address indexed token, address spender);
+    event Mint(address indexed igain, address indexed user, bytes32 indexed output, uint256 amountIn, uint256 amountOut);
+    event Burn(address indexed igain, address indexed user, bytes32 indexed input, uint256 amountIn, uint256 amountOut);
+    event Deposit(address indexed igain, address indexed user, uint256 amount);
+    event Farm(address indexed igain, address indexed user, uint256 amount);
+
     function approve(IERC20 token, address spender) public {
         token.safeApprove(spender, type(uint256).max);
     }
@@ -339,6 +345,7 @@ contract iGainYearnProxy {
         uint256 yvAmount = vault.deposit(amount, address(this));
         _a = igain.mintA(yvAmount, min_a);
         IERC20(igain.a()).safeTransfer(msg.sender, _a);
+        emit Mint(address(igain), msg.sender, "A", amount, _a);
     }
 
     function mintB(iGain igain, IERC20 token, IyVault vault, uint256 amount, uint256 min_b) external returns (uint256 _b) {
@@ -346,6 +353,7 @@ contract iGainYearnProxy {
         uint256 yvAmount = vault.deposit(amount, address(this));
         _b = igain.mintB(yvAmount, min_b);
         IERC20(igain.b()).safeTransfer(msg.sender, _b);
+        emit Mint(address(igain), msg.sender, "B", amount, _b);
     }
 
     function mintLP(iGain igain, IERC20 token, IyVault vault, uint256 amount, uint256 min_lp) external returns (uint256 _lp) {
@@ -353,6 +361,7 @@ contract iGainYearnProxy {
         uint256 yvAmount = vault.deposit(amount, address(this));
         _lp = igain.mintLP(yvAmount, min_lp);
         IERC20(address(igain)).safeTransfer(msg.sender, _lp);
+        emit Mint(address(igain), msg.sender, "LP", amount, _lp);
     }
 
     function burnA(iGain igain, IyVault vault, uint256 _a, uint256 min_amount) external returns (uint256 amount) {
@@ -362,6 +371,7 @@ contract iGainYearnProxy {
         yvAmount -= fee;
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
+        emit Burn(address(igain), msg.sender, "A", _a, amount);
     }
 
     function burnB(iGain igain, IyVault vault, uint256 _b, uint256 min_amount) external returns (uint256 amount) {
@@ -371,6 +381,7 @@ contract iGainYearnProxy {
         yvAmount -= fee;
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
+        emit Burn(address(igain), msg.sender, "B", _b, amount);
     }
 
     function burnLP(iGain igain, IyVault vault, uint256 _lp, uint256 min_amount) external returns (uint256 amount) {
@@ -380,6 +391,7 @@ contract iGainYearnProxy {
         yvAmount -= fee;
         amount = vault.withdraw(yvAmount, msg.sender);
         require(amount >= min_amount, "Slippage");
+        emit Burn(address(igain), msg.sender, "LP", _lp, amount);
     }
 
     function fixedDeposit(iGain igain, IERC20 token, IyVault vault, uint256 depositAmount, uint256 igainAmount, uint256 minToken) external returns (uint256 _a) {
@@ -388,6 +400,8 @@ contract iGainYearnProxy {
         uint256 yvAmount = vault.deposit(igainAmount, address(this));
         _a = igain.mintA(yvAmount, minToken);
         IERC20(igain.a()).safeTransfer(msg.sender, _a);
+        emit Mint(address(igain), msg.sender, "A", igainAmount, _a);
+        emit Deposit(address(igain), msg.sender, depositAmount);
     }
 
     function mintLPandFarm(iGain igain, Pool pool, IERC20 token, IyVault vault, uint256 amount, uint256 min_lp) external returns (uint256 _lp) {
@@ -395,5 +409,7 @@ contract iGainYearnProxy {
         uint256 yvAmount = vault.deposit(amount, address(this));
         _lp = igain.mintLP(yvAmount, min_lp);
         pool.stakeFor(msg.sender, _lp);
+        emit Mint(address(igain), msg.sender, "LP", amount, _lp);
+        emit Farm(address(igain), msg.sender, _lp);
     }
 }
