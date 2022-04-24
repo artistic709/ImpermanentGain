@@ -338,6 +338,7 @@ contract iGainYearnProxy {
 
     function approve(IERC20 token, address spender) public {
         token.safeApprove(spender, type(uint256).max);
+        emit Approval(address(token), spender);
     }
 
     function mintA(iGain igain, IERC20 token, IyVault vault, uint256 amount, uint256 min_a) external returns (uint256 _a) {
