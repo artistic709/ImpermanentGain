@@ -329,26 +329,36 @@ interface ILendingPool {
 contract iGainAAVEProxy {
     using SafeERC20 for IERC20;
 
+    event Approval(address indexed token, address spender);
+    event Mint(address indexed igain, address indexed user, bytes32 indexed output, uint256 amountIn, uint256 amountOut);
+    event Deposit(address indexed igain, address indexed user, uint256 amount);
+    event Borrow(address indexed igain, address indexed user, uint256 amount);
+    event Farm(address indexed igain, address indexed user, uint256 amount);
+
     function approve(IERC20 token, address spender) public {
         token.safeApprove(spender, type(uint256).max);
+        emit Approval(address(token), spender);
     }
 
     function mintA(iGain igain, IERC20 token, uint256 amount, uint256 min_a) external returns (uint256 _a) {
         token.safeTransferFrom(msg.sender, address(this), amount);
         _a = igain.mintA(amount, min_a);
         IERC20(igain.a()).safeTransfer(msg.sender, _a);
+        emit Mint(address(igain), msg.sender, "A", amount, _a);
     }
 
     function mintB(iGain igain, IERC20 token, uint256 amount, uint256 min_b) external returns (uint256 _b) {
         token.safeTransferFrom(msg.sender, address(this), amount);
         _b = igain.mintB(amount, min_b);
         IERC20(igain.b()).safeTransfer(msg.sender, _b);
+        emit Mint(address(igain), msg.sender, "B", amount, _b);
     }
 
     function mintLP(iGain igain, IERC20 token, uint256 amount, uint256 min_lp) external returns (uint256 _lp) {
         token.safeTransferFrom(msg.sender, address(this), amount);
         _lp = igain.mintLP(amount, min_lp);
         IERC20(address(igain)).safeTransfer(msg.sender, _lp);
+        emit Mint(address(igain), msg.sender, "LP", amount, _lp);
     }
 
     function fixedDeposit(iGain igain, IERC20 token, ILendingPool lendingPool, uint256 depositAmount, uint256 igainAmount, uint256 minToken) external returns (uint256 _a) {
@@ -356,6 +366,8 @@ contract iGainAAVEProxy {
         lendingPool.deposit(address(token), depositAmount, msg.sender, uint16(0));
         _a = igain.mintA(igainAmount, minToken);
         IERC20(igain.a()).safeTransfer(msg.sender, _a);
+        emit Mint(address(igain), msg.sender, "A", igainAmount, _a);
+        emit Deposit(address(igain), msg.sender, depositAmount);
     }
 
     function fixedBorrow(iGain igain, IERC20 token, ILendingPool lendingPool, uint256 borrowAmount, uint256 igainAmount, uint256 minToken) external returns (uint256 _b) {
@@ -363,11 +375,15 @@ contract iGainAAVEProxy {
         _b = igain.mintB(igainAmount, minToken);
         token.safeTransfer(msg.sender, borrowAmount - igainAmount);
         IERC20(igain.b()).safeTransfer(msg.sender, _b);
+        emit Mint(address(igain), msg.sender, "B", igainAmount, _b);
+        emit Borrow(address(igain), msg.sender, borrowAmount);
     }
 
     function mintLPandFarm(iGain igain, Pool pool, IERC20 token, uint256 amount, uint256 min_lp) external returns (uint256 _lp) {
         token.safeTransferFrom(msg.sender, address(this), amount);
         _lp = igain.mintLP(amount, min_lp);
         pool.stakeFor(msg.sender, _lp);
+        emit Mint(address(igain), msg.sender, "LP", amount, _lp);
+        emit Farm(address(igain), msg.sender, _lp);
     }
 }
